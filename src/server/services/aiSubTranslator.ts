@@ -20,7 +20,8 @@ export class AiSubTranslatorService {
 
     return jayson.Client.http({
       hostname: urlParts.hostname,
-      port: parseInt(urlParts.port || '9090')
+      port: parseInt(urlParts.port || '9090'),
+      timeout: 300000 // 5 minutes timeout for ARM64 systems
     });
   }
 
@@ -41,7 +42,10 @@ export class AiSubTranslatorService {
           return reject(err);
         }
         if (response?.error) {
-          logger.error(`[ai-sub-translator] API Error: ${response.error.message}`);
+          // Don't log "No active translation job" as an error - it's expected when checking status
+          if (!response.error.message?.includes('No active translation job')) {
+            logger.error(`[ai-sub-translator] API Error: ${response.error.message}`);
+          }
           return reject(new Error(response.error.message));
         }
         logger.info({ result: response?.result }, `[ai-sub-translator] Response from ${method}`);
@@ -63,6 +67,7 @@ export class AiSubTranslatorService {
       throw new Error('AI Subtitle Translator API key not configured');
     }
 
+    // Phase 1: Setup and extraction (critical - must succeed)
     try {
       // Always clear before starting a new translation to ensure clean state
       await this.request('clear');
@@ -91,7 +96,13 @@ export class AiSubTranslatorService {
         await this.request('subtitle.extract', [subtitleToExtract.id]);
         logger.info({ subtitleId: subtitleToExtract.id }, `Extracted subtitle stream ${subtitleToExtract.id}`);
       }
+    } catch (error) {
+      logger.error(`Setup/extraction phase failed: ${error}`);
+      throw error; // This is a real failure
+    }
 
+    // Phase 2: Start translation (critical - must succeed)
+    try {
       const translationOptions = {
         apiKey,
         language: targetLanguage,
@@ -105,9 +116,26 @@ export class AiSubTranslatorService {
 
       // Small delay to ensure job is registered before polling
       await new Promise(resolve => setTimeout(resolve, 500));
+    } catch (error) {
+      logger.error(`Failed to start translation: ${error}`);
+      throw error; // This is a real failure
+    }
 
+    // Phase 3: Monitor progress (non-critical - errors here don't mean translation failed)
+    try {
       await this.pollProgress(progressCallback);
+    } catch (error) {
+      // If polling fails, it doesn't mean translation failed
+      // The translation might still be running in ai-sub-translator
+      logger.warn(`Progress polling encountered an issue: ${error}`);
+      logger.info('Translation may still be running in ai-sub-translator');
 
+      // Wait a bit and try to get the result anyway
+      await new Promise(resolve => setTimeout(resolve, 5000));
+    }
+
+    // Phase 4: Get results and save (critical)
+    try {
       // Get the translated result first
       const translationResult = await this.request('translation.result');
       logger.info(`Translation result received, ${translationResult?.length || 0} characters`);
@@ -121,10 +149,8 @@ export class AiSubTranslatorService {
 
       return outputPath;
     } catch (error) {
-      logger.error(`Translation failed: ${error}`);
-      throw error;
-    } finally {
-      // Clean up if needed
+      logger.error(`Failed to get/save translation result: ${error}`);
+      throw error; // This is a real failure
     }
   }
 
@@ -142,7 +168,9 @@ export class AiSubTranslatorService {
 
       this.pollInterval = setInterval(async () => {
         try {
-          const status = await this.request('translation.status');
+          // Use a shorter timeout for status checks
+          const statusClient = this.createQuickClient();
+          const status = await this.quickRequest(statusClient, 'translation.status', []);
 
           // Reset retry counter on successful status check
           noJobRetries = 0;
@@ -286,12 +314,57 @@ export class AiSubTranslatorService {
     }
   }
 
+  private createQuickClient(): jayson.HttpClient {
+    const settings = SettingsService.getInstance();
+    const url = settings.getSetting('aiSubTranslatorUrl') || 'http://localhost:9090';
+    const urlParts = new URL(url);
+
+    return jayson.Client.http({
+      hostname: urlParts.hostname,
+      port: parseInt(urlParts.port || '9090'),
+      timeout: 3000 // 3 second timeout for quick checks
+    });
+  }
+
+  private async quickRequest(client: jayson.HttpClient, method: string, params: any[] = []): Promise<any> {
+    return new Promise((resolve, reject) => {
+      client.request(method, params, (err: any, response: any) => {
+        if (err) {
+          reject(err);
+        } else if (response?.error) {
+          reject(new Error(response.error.message));
+        } else {
+          resolve(response?.result);
+        }
+      });
+    });
+  }
+
   async hasActiveTranslation(): Promise<boolean> {
     try {
-      const status = await this.request('translation.status');
-      return status.status === 'active' || status.status === 'processing';
+      // Create a separate client with short timeout for status checks
+      const settings = SettingsService.getInstance();
+      const url = settings.getSetting('aiSubTranslatorUrl') || 'http://localhost:9090';
+      const urlParts = new URL(url);
+
+      const quickClient = jayson.Client.http({
+        hostname: urlParts.hostname,
+        port: parseInt(urlParts.port || '9090'),
+        timeout: 2000 // 2 second timeout for status checks only
+      });
+
+      return new Promise((resolve) => {
+        quickClient.request('translation.status', [], (err: any, response: any) => {
+          if (err || response?.error) {
+            // Any error means no active translation
+            resolve(false);
+          } else {
+            const status = response?.result;
+            resolve(status?.status === 'active' || status?.status === 'processing');
+          }
+        });
+      });
     } catch (error) {
-      // If there's an error getting status, assume no active translation
       return false;
     }
   }

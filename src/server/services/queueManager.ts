@@ -120,17 +120,36 @@ export class QueueManager {
   }
 
   private async processQueue(): Promise<void> {
-    if (this.isProcessing || this.isCancelled) return;
-
-    // Check if ai-sub-translator has an active translation
-    const translator = AiSubTranslatorService.getInstance();
-    const hasActive = await translator.hasActiveTranslation();
-    if (hasActive) {
-      logger.debug('ai-sub-translator has an active translation, skipping queue processing');
+    // First check our in-memory flag
+    if (this.isProcessing || this.isCancelled) {
+      // Use info so we can see this in production
+      if (this.isProcessing) {
+        logger.info(`Queue: Skipping - already processing ${this.currentItem?.item_name || 'unknown'}`);
+      }
       return;
     }
 
+    logger.info('Queue: Checking for new work...');
+
     const db = getDb();
+
+    // Double-check the database for active items
+    // This is the source of truth - if we have an active item, don't start another
+    const activeItem = db.prepare(`
+      SELECT * FROM queue
+      WHERE status = 'active'
+      LIMIT 1
+    `).get() as QueueItem | undefined;
+
+    if (activeItem) {
+      // We have an active item in our DB, don't start a new one
+      // Also update our flag to be in sync
+      logger.info(`Active item found in DB: ${activeItem.item_name}, syncing flags`);
+      this.isProcessing = true;
+      this.currentItem = activeItem;
+      return;
+    }
+
     const nextItem = db.prepare(`
       SELECT * FROM queue
       WHERE status = 'pending'
@@ -140,12 +159,39 @@ export class QueueManager {
 
     if (!nextItem) return;
 
+    // DOUBLE CHECK: Make absolutely sure there's no active item
+    // This is critical because starting a new translation will clear the current one
+    const doubleCheck = db.prepare(`
+      SELECT * FROM queue
+      WHERE status = 'active'
+      LIMIT 1
+    `).get() as QueueItem | undefined;
+
+    if (doubleCheck) {
+      logger.warn(`RACE CONDITION PREVENTED: Found active item on double-check: ${doubleCheck.item_name}`);
+      this.isProcessing = true;
+      this.currentItem = doubleCheck;
+      return;
+    }
+
+    // Set flags FIRST before any async operations
+    logger.info(`Queue: Setting isProcessing=true for ${nextItem.item_name}`);
     this.isProcessing = true;
     this.currentItem = nextItem;
 
+    // CRITICAL: Update database to mark as active - this MUST succeed
     try {
       this.updateQueueItem(nextItem.id!, { status: 'active', progress: 0 });
+      logger.info(`Queue: Started translation: ${nextItem.item_name}`);
+    } catch (dbError) {
+      logger.error(`CRITICAL: Failed to update queue item to active: ${dbError}`);
+      this.isProcessing = false;
+      this.currentItem = null;
+      throw dbError; // Fail immediately if we can't update the DB
+    }
 
+    // Now try the actual translation
+    try {
       const translator = AiSubTranslatorService.getInstance();
       await translator.translateSubtitle(
         nextItem.subtitle_file,
@@ -153,33 +199,52 @@ export class QueueManager {
         (progress) => {
           // Only update progress if we're still processing this item
           if (this.currentItem?.id === nextItem.id && !this.isCancelled) {
-            this.updateQueueItem(nextItem.id!, { progress: Math.round(progress) });
+            try {
+              this.updateQueueItem(nextItem.id!, { progress: Math.round(progress) });
+            } catch (err) {
+              logger.warn(`Failed to update progress: ${err}`);
+            }
           }
         },
         nextItem.subtitle_stream_id
       );
 
-      this.updateQueueItem(nextItem.id!, {
-        status: 'completed',
-        progress: 100
-      });
+      // Translation succeeded - mark as completed
+      try {
+        this.updateQueueItem(nextItem.id!, {
+          status: 'completed',
+          progress: 100
+        });
+        logger.info(`Translation completed: ${nextItem.item_name}`);
+      } catch (dbError) {
+        logger.error(`Failed to mark translation as completed in DB: ${dbError}`);
+      }
 
-      logger.info(`Translation completed: ${nextItem.item_name}`);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.updateQueueItem(nextItem.id!, {
-        status: 'failed',
-        error: errorMessage
-      });
-      logger.error(`Translation failed: ${nextItem.item_name} - ${errorMessage}`);
-    } finally {
+      // Translation truly completed - safe to reset flags
+      logger.info(`Queue: Translation completed, resetting isProcessing=false`);
       this.isProcessing = false;
       this.currentItem = null;
-      // Only continue processing if not cancelled
-      if (!this.isCancelled) {
-        setTimeout(() => this.processQueue(), 1000);
+
+    } catch (error) {
+      // Translation failed - mark as failed in DB
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+      try {
+        this.updateQueueItem(nextItem.id!, {
+          status: 'failed',
+          error: errorMessage
+        });
+      } catch (dbError) {
+        logger.error(`Failed to mark translation as failed in DB: ${dbError}`);
       }
+      logger.error(`Translation failed: ${nextItem.item_name} - ${errorMessage}`);
+
+      // Only reset flags after marking as failed
+      logger.info(`Queue: Translation failed, resetting isProcessing=false`);
+      this.isProcessing = false;
+      this.currentItem = null;
     }
+    // No finally block needed - the interval will handle the next check
   }
 
   private updateQueueItem(id: number, updates: Partial<QueueItem>): void {

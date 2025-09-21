@@ -1,6 +1,6 @@
 {
   "name": "interpretarr",
-  "version": "1.0.9",
+  "version": "1.0.14",
   "description": "AI-powered subtitle translation server for Radarr/Sonarr",
   "type": "module",
   "scripts": {
