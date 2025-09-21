@@ -1,0 +1,49 @@
+{
+  "name": "interpretarr",
+  "version": "1.0.9",
+  "description": "AI-powered subtitle translation server for Radarr/Sonarr",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "tsx watch src/server/index.ts",
+    "dev:client": "cd client && npm run dev",
+    "build": "npm run build:server && npm run build:client",
+    "build:server": "tsc -p tsconfig.server.json",
+    "build:client": "cd client && npm run build",
+    "start": "node dist/server/index.js",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "test:coverage:watch": "vitest --coverage",
+    "test:server": "vitest tests/server",
+    "test:client": "vitest tests/client",
+    "lint": "eslint . --ext ts,tsx",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fastify/cors": "^9.0.1",
+    "@fastify/static": "^7.0.0",
+    "fastify": "^4.28.1",
+    "node-fetch": "^3.3.2",
+    "better-sqlite3": "^11.5.0",
+    "crypto-js": "^4.2.0",
+    "jayson": "^4.1.0",
+    "pino": "^9.5.0",
+    "pino-pretty": "^11.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/crypto-js": "^4.2.2",
+    "@types/better-sqlite3": "^7.6.11",
+    "@typescript-eslint/eslint-plugin": "^8.19.1",
+    "@typescript-eslint/parser": "^8.19.1",
+    "@vitest/ui": "^2.1.8",
+    "concurrently": "^9.1.2",
+    "eslint": "^9.18.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8",
+    "@vitest/coverage-v8": "^2.1.8"
+  }
+}
