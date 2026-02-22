@@ -14,8 +14,7 @@ const TMP_DIR = path.join(E2E_DIR, 'tmp');
 const MOVIES_DIR = path.join(TMP_DIR, 'movies');
 const RADARR_CONFIG_DIR = path.join(TMP_DIR, 'radarr-config');
 const SCREENSHOTS_DIR = path.join(E2E_DIR, 'screenshots');
-const DATA_DIR = path.join(PROJECT_DIR, 'data');
-const DATA_BACKUP = path.join(TMP_DIR, 'data-backup');
+const DATA_DIR = path.join(TMP_DIR, 'data');
 
 // Source of MKV test media (public domain films)
 const MEDIA_SOURCE = path.resolve(PROJECT_DIR, '../Interpretarr_e2e');
@@ -213,25 +212,11 @@ async function triggerRadarrRescan(apiKey: string): Promise<void> {
   await new Promise((r) => setTimeout(r, 15000));
 }
 
-function backupDataDir(): void {
+function cleanDataDir(): void {
   if (fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_BACKUP, { recursive: true });
-    const dbFile = path.join(DATA_DIR, 'interpretarr.db');
-    if (fs.existsSync(dbFile)) {
-      fs.copyFileSync(dbFile, path.join(DATA_BACKUP, 'interpretarr.db'));
-    }
-    // Remove for clean test run
     fs.rmSync(DATA_DIR, { recursive: true, force: true });
   }
-}
-
-function restoreDataDir(): void {
-  const backupDb = path.join(DATA_BACKUP, 'interpretarr.db');
-  if (fs.existsSync(backupDb)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.copyFileSync(backupDb, path.join(DATA_DIR, 'interpretarr.db'));
-    fs.rmSync(DATA_BACKUP, { recursive: true, force: true });
-  }
+  fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
 function killPortProcess(port: number): void {
@@ -258,7 +243,7 @@ function startInterpretarr(): ChildProcess {
   const child = spawn('npx', ['tsx', 'src/server/index.ts'], {
     cwd: PROJECT_DIR,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, PORT: String(INTERPRETARR_PORT) },
+    env: { ...process.env, PORT: String(INTERPRETARR_PORT), DATA_DIR },
     detached: false,
   });
 
@@ -341,16 +326,9 @@ test.describe('Interpretarr E2E — Subtitle Translation', () => {
     await triggerRadarrRescan(radarrApiKey);
     console.log('Rescan complete.');
 
-    // Backup existing data dir and start fresh
+    // Clean E2E data directory for fresh test run
     console.log('Preparing clean database...');
-    backupDataDir();
-
-    // Ensure /app/data exists for the logger (hardcoded path in logger.ts)
-    try {
-      fs.mkdirSync('/app/data', { recursive: true });
-    } catch {
-      // May fail if /app is not writable — ignore, server may still work
-    }
+    cleanDataDir();
 
     // Start Interpretarr server
     console.log('Starting Interpretarr...');
@@ -376,9 +354,6 @@ test.describe('Interpretarr E2E — Subtitle Translation', () => {
     } catch {
       console.warn('Failed to stop docker compose');
     }
-
-    // Restore the original data dir
-    restoreDataDir();
   });
 
   test(

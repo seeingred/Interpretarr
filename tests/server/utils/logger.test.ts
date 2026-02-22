@@ -5,6 +5,9 @@ import fs from 'fs';
 // Mock dependencies before importing logger
 vi.mock('pino');
 vi.mock('fs');
+vi.mock('../../../src/server/utils/dataDir', () => ({
+  getDataDir: () => '/app/data',
+}));
 
 describe('Logger', () => {
   let mockCreateWriteStream: Mock;

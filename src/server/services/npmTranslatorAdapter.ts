@@ -2,6 +2,7 @@ import { translate, extractSubtitle } from 'ai-sub-translator';
 import { readFileSync, writeFileSync } from 'fs';
 import { TranslatorService } from './translatorService.js';
 import { SettingsService } from './settings.js';
+import { getFfmpegDir } from './ffmpegManager.js';
 import path from 'path';
 
 export class NpmTranslatorAdapter implements TranslatorService {
@@ -12,6 +13,7 @@ export class NpmTranslatorAdapter implements TranslatorService {
     targetLanguage: string;
     context: string;
     streamId?: number;
+    sourceLanguage?: string;
     onProgress: (progress: number) => void;
     signal: AbortSignal;
   }): Promise<string> {
@@ -23,7 +25,7 @@ export class NpmTranslatorAdapter implements TranslatorService {
 
     let subtitleContent: string;
     if (options.streamId != null) {
-      subtitleContent = await extractSubtitle(options.subtitlePath, options.streamId);
+      subtitleContent = await extractSubtitle(options.subtitlePath, options.streamId, getFfmpegDir());
     } else {
       subtitleContent = readFileSync(options.subtitlePath, 'utf-8');
     }
@@ -35,6 +37,7 @@ export class NpmTranslatorAdapter implements TranslatorService {
       model,
       batchSize,
       context: options.context,
+      sourceLanguage: options.sourceLanguage,
       onProgress: options.onProgress,
       signal: options.signal,
     });

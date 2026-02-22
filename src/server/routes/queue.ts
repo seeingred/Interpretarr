@@ -7,8 +7,8 @@ export async function setupQueueRoutes(fastify: FastifyInstance, queueManager: Q
   });
 
   fastify.post('/queue', async (request) => {
-    const item = request.body as QueueItemInput;
-    const inserted = queueManager.addToQueue(item);
+    const body = request.body as QueueItemInput & { source_language?: string };
+    const inserted = queueManager.addToQueue(body);
     return { id: inserted.id, success: true };
   });
 

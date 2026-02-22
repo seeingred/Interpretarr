@@ -8,5 +8,5 @@ services:
       - ./data:/app/data
       # Mount media at the SAME path as Radarr/Sonarr reports,
       # so file paths match between services.
-      - /path/to/media:/path/to/media:ro
+      - /path/to/media:/path/to/media:rw
     restart: unless-stopped

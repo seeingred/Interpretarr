@@ -1,11 +1,13 @@
 import { FastifyInstance } from 'fastify';
 import fs from 'fs/promises';
 import { existsSync } from 'fs';
+import path from 'path';
+import { getDataDir } from '../utils/dataDir.js';
 
 export function setupLogsRoutes(fastify: FastifyInstance) {
   fastify.get('/logs', async (request, reply) => {
     try {
-      const logFile = '/app/data/app.log';
+      const logFile = path.join(getDataDir(), 'app.log');
 
       // Check if log file exists
       if (!existsSync(logFile)) {

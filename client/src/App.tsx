@@ -5,6 +5,7 @@ import Movies from './pages/Movies';
 import Queue from './pages/Queue';
 import Settings from './pages/Settings';
 import Logs from './pages/Logs';
+import FFmpegNotification from './components/FFmpegNotification';
 import { useEffect, useState } from 'react';
 import api from './services/api';
 
@@ -30,6 +31,7 @@ function App() {
 
   return (
     <Router>
+      <FFmpegNotification />
       <Routes>
         <Route path="/" element={
           <Layout

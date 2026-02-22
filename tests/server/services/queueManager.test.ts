@@ -69,7 +69,7 @@ describe('QueueManager', () => {
       expect(result).toEqual(insertedItem);
       expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO queue'));
       expect(mockDb._run).toHaveBeenCalledWith(
-        'movie', 'movie-1', 'Test Movie', '/path/to/sub.srt', null, 'es'
+        'movie', 'movie-1', 'Test Movie', '/path/to/sub.srt', null, null, 'es'
       );
     });
 
@@ -87,7 +87,7 @@ describe('QueueManager', () => {
       });
 
       expect(mockDb._run).toHaveBeenCalledWith(
-        'episode', 'ep-1', 'Test Episode', '/path/to/video.mkv', 3, 'fr'
+        'episode', 'ep-1', 'Test Episode', '/path/to/video.mkv', 3, null, 'fr'
       );
     });
 
@@ -104,7 +104,7 @@ describe('QueueManager', () => {
       });
 
       expect(mockDb._run).toHaveBeenCalledWith(
-        'movie', 'movie-2', 'No Stream Movie', '/path/to/sub.srt', null, 'de'
+        'movie', 'movie-2', 'No Stream Movie', '/path/to/sub.srt', null, null, 'de'
       );
     });
 

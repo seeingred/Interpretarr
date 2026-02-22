@@ -8,6 +8,7 @@ export interface QueueItem {
   item_name: string;
   subtitle_file: string;
   subtitle_stream_id?: number;
+  source_language?: string;
   target_language: string;
   status: 'pending' | 'active' | 'completed' | 'failed';
   progress: number;
@@ -22,6 +23,7 @@ export interface QueueItemInput {
   item_name: string;
   subtitle_file: string;
   subtitle_stream_id?: number;
+  source_language?: string;
   target_language: string;
 }
 
@@ -43,10 +45,10 @@ export class QueueManager {
 
   addToQueue(item: QueueItemInput): QueueItem {
     const stmt = this.db.prepare(`
-      INSERT INTO queue (type, item_id, item_name, subtitle_file, subtitle_stream_id, target_language, status, progress)
-      VALUES (?, ?, ?, ?, ?, ?, 'pending', 0)
+      INSERT INTO queue (type, item_id, item_name, subtitle_file, subtitle_stream_id, source_language, target_language, status, progress)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 0)
     `);
-    const result = stmt.run(item.type, item.item_id, item.item_name, item.subtitle_file, item.subtitle_stream_id ?? null, item.target_language);
+    const result = stmt.run(item.type, item.item_id, item.item_name, item.subtitle_file, item.subtitle_stream_id ?? null, item.source_language ?? null, item.target_language);
     this.logger.info(`Added to queue: ${item.item_name} -> ${item.target_language}`);
     this.triggerProcessNext();
     return this.getQueueItem(result.lastInsertRowid as number)!;
@@ -137,6 +139,7 @@ export class QueueManager {
           targetLanguage: next.target_language,
           context: next.item_name,
           streamId: next.subtitle_stream_id,
+          sourceLanguage: next.source_language,
           onProgress: (progress: number) => {
             if (!abortController.signal.aborted) {
               this.db.prepare("UPDATE queue SET progress = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")

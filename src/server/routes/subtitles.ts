@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import path from 'path';
 import fs from 'fs';
 import { getVideoInfo } from 'ai-sub-translator';
+import { getFfmpegDir } from '../services/ffmpegManager.js';
 
 export async function setupSubtitleRoutes(fastify: FastifyInstance) {
   fastify.post('/subtitles/available', async (request, reply) => {
@@ -31,13 +32,14 @@ export async function setupSubtitleRoutes(fastify: FastifyInstance) {
 
       // Detect embedded subtitle tracks via ffmpeg
       try {
-        const videoInfo = await getVideoInfo(videoPath);
+        const videoInfo = await getVideoInfo(videoPath, getFfmpegDir());
         for (const track of videoInfo.subtitleTracks) {
           subtitles.push({
             path: videoPath,
             filename: `[Embedded] ${track.title || 'Stream #' + track.index} (${track.language || 'und'}) - ${track.format}`,
             type: 'embedded',
             streamId: track.index,
+            language: track.language || undefined,
           });
         }
       } catch (err) {

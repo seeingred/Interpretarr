@@ -18,6 +18,9 @@ vi.mock('path', () => ({
 vi.mock('url', () => ({
   fileURLToPath: vi.fn().mockReturnValue('/mocked/file/path.js'),
 }));
+vi.mock('../../../src/server/utils/dataDir', () => ({
+  getDataDir: () => '/mocked/data',
+}));
 
 describe('Database', () => {
   let mockDb: any;
@@ -41,6 +44,7 @@ describe('Database', () => {
     mockDb = {
       exec: mockExec,
       prepare: mockPrepare,
+      pragma: vi.fn(),
     };
 
     (Database as unknown as Mock).mockReturnValue(mockDb);
@@ -58,6 +62,7 @@ describe('Database', () => {
         all: vi.fn().mockReturnValue([
           { name: 'id' },
           { name: 'subtitle_stream_id' },
+          { name: 'source_language' },
         ]),
       });
 
@@ -71,7 +76,7 @@ describe('Database', () => {
     it('should create data directory if it does not exist', () => {
       (fs.existsSync as Mock).mockReturnValue(false);
       mockPrepare.mockReturnValue({
-        all: vi.fn().mockReturnValue([{ name: 'subtitle_stream_id' }]),
+        all: vi.fn().mockReturnValue([{ name: 'subtitle_stream_id' }, { name: 'source_language' }]),
       });
 
       initializeDatabase();
@@ -82,7 +87,7 @@ describe('Database', () => {
     it('should not create data directory if it exists', () => {
       (fs.existsSync as Mock).mockReturnValue(true);
       mockPrepare.mockReturnValue({
-        all: vi.fn().mockReturnValue([{ name: 'subtitle_stream_id' }]),
+        all: vi.fn().mockReturnValue([{ name: 'subtitle_stream_id' }, { name: 'source_language' }]),
       });
 
       initializeDatabase();
@@ -92,7 +97,7 @@ describe('Database', () => {
 
     it('should create queue table with correct schema', () => {
       mockPrepare.mockReturnValue({
-        all: vi.fn().mockReturnValue([{ name: 'subtitle_stream_id' }]),
+        all: vi.fn().mockReturnValue([{ name: 'subtitle_stream_id' }, { name: 'source_language' }]),
       });
 
       initializeDatabase();
@@ -104,6 +109,7 @@ describe('Database', () => {
       expect(createTableCall).toContain('item_name TEXT NOT NULL');
       expect(createTableCall).toContain('subtitle_file TEXT NOT NULL');
       expect(createTableCall).toContain('subtitle_stream_id INTEGER');
+      expect(createTableCall).toContain('source_language TEXT');
       expect(createTableCall).toContain('target_language TEXT NOT NULL');
       expect(createTableCall).toContain("status TEXT DEFAULT 'pending'");
       expect(createTableCall).toContain('progress INTEGER DEFAULT 0');
@@ -114,7 +120,7 @@ describe('Database', () => {
 
     it('should create settings table with correct schema', () => {
       mockPrepare.mockReturnValue({
-        all: vi.fn().mockReturnValue([{ name: 'subtitle_stream_id' }]),
+        all: vi.fn().mockReturnValue([{ name: 'subtitle_stream_id' }, { name: 'source_language' }]),
       });
 
       initializeDatabase();
@@ -127,7 +133,7 @@ describe('Database', () => {
 
     it('should create indexes', () => {
       mockPrepare.mockReturnValue({
-        all: vi.fn().mockReturnValue([{ name: 'subtitle_stream_id' }]),
+        all: vi.fn().mockReturnValue([{ name: 'subtitle_stream_id' }, { name: 'source_language' }]),
       });
 
       initializeDatabase();
@@ -149,6 +155,7 @@ describe('Database', () => {
 
       expect(mockPrepare).toHaveBeenCalledWith('PRAGMA table_info(queue)');
       expect(mockExec).toHaveBeenCalledWith('ALTER TABLE queue ADD COLUMN subtitle_stream_id INTEGER');
+      expect(mockExec).toHaveBeenCalledWith('ALTER TABLE queue ADD COLUMN source_language TEXT');
     });
 
     it('should skip migration if subtitle_stream_id exists', () => {
@@ -156,6 +163,7 @@ describe('Database', () => {
         all: vi.fn().mockReturnValue([
           { name: 'id' },
           { name: 'subtitle_stream_id' },
+          { name: 'source_language' },
         ]),
       });
 
@@ -163,6 +171,7 @@ describe('Database', () => {
 
       expect(mockExec).toHaveBeenCalledTimes(1); // Only table creation
       expect(mockExec).not.toHaveBeenCalledWith('ALTER TABLE queue ADD COLUMN subtitle_stream_id INTEGER');
+      expect(mockExec).not.toHaveBeenCalledWith('ALTER TABLE queue ADD COLUMN source_language TEXT');
     });
 
     it('should handle migration error gracefully', () => {
@@ -177,7 +186,7 @@ describe('Database', () => {
   describe('getDb', () => {
     it('should return database instance when initialized', () => {
       mockPrepare.mockReturnValue({
-        all: vi.fn().mockReturnValue([{ name: 'subtitle_stream_id' }]),
+        all: vi.fn().mockReturnValue([{ name: 'subtitle_stream_id' }, { name: 'source_language' }]),
       });
       initializeDatabase();
 
@@ -191,7 +200,7 @@ describe('Database', () => {
 
     it('should return same instance on multiple calls', () => {
       mockPrepare.mockReturnValue({
-        all: vi.fn().mockReturnValue([{ name: 'subtitle_stream_id' }]),
+        all: vi.fn().mockReturnValue([{ name: 'subtitle_stream_id' }, { name: 'source_language' }]),
       });
       initializeDatabase();
 

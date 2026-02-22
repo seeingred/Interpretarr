@@ -48,11 +48,11 @@ docker compose up -d --build
 docker build -t interpretarr .
 docker run -d --name interpretarr -p 3000:3000 \
   -v ./data:/app/data \
-  -v /path/to/media:/path/to/media:ro \
+  -v /path/to/media:/path/to/media \
   interpretarr
 ```
 
-The media volume must be mounted at the **same path** inside the container as Radarr/Sonarr uses on the host, so that file paths match. Mount it read-only (`:ro`) since Interpretarr only reads video files to discover subtitles.
+The media volume must be mounted at the **same path** inside the container as Radarr/Sonarr uses on the host, so that file paths match. Write access is needed so translated subtitle files can be saved alongside the video files.
 
 ## Configuration
 

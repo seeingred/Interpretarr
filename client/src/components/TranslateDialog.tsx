@@ -25,11 +25,43 @@ const POPULAR_LANGUAGES = [
   { code: 'zh', name: 'Chinese' },
 ].sort((a, b) => a.name.localeCompare(b.name));
 
+const ISO_639_MAP: Record<string, string> = {
+  eng: 'English', en: 'English',
+  spa: 'Spanish', es: 'Spanish',
+  fra: 'French', fre: 'French', fr: 'French',
+  deu: 'German', ger: 'German', de: 'German',
+  ita: 'Italian', it: 'Italian',
+  por: 'Portuguese', pt: 'Portuguese',
+  rus: 'Russian', ru: 'Russian',
+  jpn: 'Japanese', ja: 'Japanese',
+  kor: 'Korean', ko: 'Korean',
+  zho: 'Chinese', chi: 'Chinese', zh: 'Chinese',
+  ara: 'Arabic', ar: 'Arabic',
+  hin: 'Hindi', hi: 'Hindi',
+  tur: 'Turkish', tr: 'Turkish',
+  pol: 'Polish', pl: 'Polish',
+  nld: 'Dutch', dut: 'Dutch', nl: 'Dutch',
+  swe: 'Swedish', sv: 'Swedish',
+  nor: 'Norwegian', no: 'Norwegian',
+  dan: 'Danish', da: 'Danish',
+  fin: 'Finnish', fi: 'Finnish',
+  ces: 'Czech', cze: 'Czech', cs: 'Czech',
+  hun: 'Hungarian', hu: 'Hungarian',
+  ron: 'Romanian', rum: 'Romanian', ro: 'Romanian',
+  tha: 'Thai', th: 'Thai',
+  vie: 'Vietnamese', vi: 'Vietnamese',
+  ind: 'Indonesian', id: 'Indonesian',
+  heb: 'Hebrew', he: 'Hebrew',
+  ell: 'Greek', gre: 'Greek', el: 'Greek',
+  ukr: 'Ukrainian', uk: 'Ukrainian',
+};
+
 interface Subtitle {
   path: string;
   filename: string;
   type?: 'external' | 'embedded';
   streamId?: number;
+  language?: string;
 }
 
 function TranslateDialog({
@@ -42,6 +74,7 @@ function TranslateDialog({
 }: TranslateDialogProps) {
   const [subtitles, setSubtitles] = useState<Subtitle[]>([]);
   const [selectedSubtitle, setSelectedSubtitle] = useState('');
+  const [sourceLanguage, setSourceLanguage] = useState('');
   const [targetLanguage, setTargetLanguage] = useState('');
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
@@ -61,6 +94,9 @@ function TranslateDialog({
         setSelectedSubtitle(
           firstSub.streamId !== undefined ? `stream:${firstSub.streamId}` : firstSub.path
         );
+        if (firstSub.language) {
+          setSourceLanguage(ISO_639_MAP[firstSub.language] || firstSub.language);
+        }
       }
     } catch (error) {
       console.error('Failed to load subtitles:', error);
@@ -96,6 +132,7 @@ function TranslateDialog({
       item_name: itemName,
       subtitle_file: subtitleFile,
       subtitle_stream_id: streamId,
+      source_language: sourceLanguage || undefined,
       target_language: targetLanguage,
     };
 
@@ -171,7 +208,17 @@ function TranslateDialog({
                         </label>
                         <select
                           value={selectedSubtitle}
-                          onChange={(e) => setSelectedSubtitle(e.target.value)}
+                          onChange={(e) => {
+                            setSelectedSubtitle(e.target.value);
+                            const sub = subtitles.find(s =>
+                              s.streamId !== undefined ? `stream:${s.streamId}` === e.target.value : s.path === e.target.value
+                            );
+                            if (sub?.language) {
+                              setSourceLanguage(ISO_639_MAP[sub.language] || sub.language);
+                            } else {
+                              setSourceLanguage('');
+                            }
+                          }}
                           className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                           {subtitles.map((subtitle) => (
@@ -183,6 +230,28 @@ function TranslateDialog({
                             </option>
                           ))}
                         </select>
+                      </div>
+
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-2">
+                          Source Language
+                          <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">(optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          list="source-languages"
+                          value={sourceLanguage}
+                          onChange={(e) => setSourceLanguage(e.target.value)}
+                          placeholder="Auto-detect"
+                          className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <datalist id="source-languages">
+                          {POPULAR_LANGUAGES.map((lang) => (
+                            <option key={lang.code} value={lang.name}>
+                              {lang.name}
+                            </option>
+                          ))}
+                        </datalist>
                       </div>
 
                       <div className="mb-4">

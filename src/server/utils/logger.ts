@@ -1,12 +1,9 @@
 import pino from 'pino';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { getDataDir } from './dataDir.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-// Use /app/data in Docker, data/ relative to project root in development
-const logDir = fs.existsSync('/app/data') ? '/app/data' : path.join(__dirname, '../../../data');
+const logDir = getDataDir();
 fs.mkdirSync(logDir, { recursive: true });
 
 // Create a write stream to log file

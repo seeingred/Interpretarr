@@ -6,6 +6,7 @@ import { setupRadarrRoutes } from './radarr.js';
 import { setupSubtitleRoutes } from './subtitles.js';
 import { setupHealthRoutes } from './health.js';
 import { setupLogsRoutes } from './logs.js';
+import { setupFfmpegRoutes } from './ffmpeg.js';
 import { QueueManager } from '../services/queueManager.js';
 
 export async function setupRoutes(fastify: FastifyInstance, queueManager: QueueManager) {
@@ -17,5 +18,6 @@ export async function setupRoutes(fastify: FastifyInstance, queueManager: QueueM
     await setupSubtitleRoutes(fastify);
     await setupHealthRoutes(fastify);
     await setupLogsRoutes(fastify);
+    await setupFfmpegRoutes(fastify);
   }, { prefix: '/api' });
 }

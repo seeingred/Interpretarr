@@ -9,6 +9,7 @@ import { QueueManager } from './services/queueManager.js';
 import { NpmTranslatorAdapter } from './services/npmTranslatorAdapter.js';
 import { SettingsService } from './services/settings.js';
 import { logger } from './utils/logger.js';
+import { startFfmpegDownload } from './services/ffmpegManager.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -54,6 +55,11 @@ async function start() {
     const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
     await fastify.listen({ port, host: '0.0.0.0' });
     console.log(`Server running on http://localhost:${port}`);
+
+    // Pre-download FFmpeg in the background
+    startFfmpegDownload().catch(err => {
+      console.error('FFmpeg background download failed:', err.message);
+    });
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);

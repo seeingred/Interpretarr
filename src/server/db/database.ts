@@ -1,18 +1,16 @@
 import Database from 'better-sqlite3';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import fs from 'fs';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dbPath = path.join(__dirname, '../../../data/interpretarr.db');
+import { getDataDir } from '../utils/dataDir.js';
 
 let db: Database.Database;
 
 export function initializeDatabase() {
-  const dataDir = path.dirname(dbPath);
+  const dataDir = getDataDir();
   if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
   }
+  const dbPath = path.join(dataDir, 'interpretarr.db');
 
   db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
@@ -25,6 +23,7 @@ export function initializeDatabase() {
       item_name TEXT NOT NULL,
       subtitle_file TEXT NOT NULL,
       subtitle_stream_id INTEGER,
+      source_language TEXT,
       target_language TEXT NOT NULL,
       status TEXT DEFAULT 'pending',
       progress INTEGER DEFAULT 0,
@@ -49,6 +48,11 @@ export function initializeDatabase() {
     if (!hasStreamId) {
       db.exec("ALTER TABLE queue ADD COLUMN subtitle_stream_id INTEGER");
       console.log('Added subtitle_stream_id column to existing queue table');
+    }
+    const hasSourceLanguage = columns.some((col: any) => col.name === 'source_language');
+    if (!hasSourceLanguage) {
+      db.exec("ALTER TABLE queue ADD COLUMN source_language TEXT");
+      console.log('Added source_language column to existing queue table');
     }
   } catch (error) {
     // Table might not exist yet, which is fine
