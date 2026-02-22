@@ -6,5 +6,7 @@ services:
       - "3000:3000"
     volumes:
       - ./data:/app/data
-      - /path/to/media:/media:ro
+      # Mount media at the SAME path as Radarr/Sonarr reports,
+      # so file paths match between services.
+      - /path/to/media:/path/to/media:ro
     restart: unless-stopped

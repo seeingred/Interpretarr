@@ -30,7 +30,7 @@ cd Interpretarr
 cp docker-compose.example.yml docker-compose.yml
 ```
 
-Edit `docker-compose.yml` and replace `/path/to/media` with your media directory, then:
+Edit `docker-compose.yml` and replace `/path/to/media` with your media root directory. **Important**: the media must be mounted at the same path inside the container so that file paths from Radarr/Sonarr work correctly. Then:
 
 ```bash
 docker compose up -d
@@ -48,11 +48,11 @@ docker compose up -d --build
 docker build -t interpretarr .
 docker run -d --name interpretarr -p 3000:3000 \
   -v ./data:/app/data \
-  -v /path/to/media:/media:ro \
+  -v /path/to/media:/path/to/media:ro \
   interpretarr
 ```
 
-The media volume should point to the same root media directory that Sonarr/Radarr use. Mount it read-only (`:ro`) since Interpretarr only reads video files to discover subtitles.
+The media volume must be mounted at the **same path** inside the container as Radarr/Sonarr uses on the host, so that file paths match. Mount it read-only (`:ro`) since Interpretarr only reads video files to discover subtitles.
 
 ## Configuration
 

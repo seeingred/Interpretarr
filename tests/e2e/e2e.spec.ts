@@ -234,8 +234,28 @@ function restoreDataDir(): void {
   }
 }
 
+function killPortProcess(port: number): void {
+  try {
+    const pids = execSync(`lsof -ti :${port}`, { encoding: 'utf-8' }).trim();
+    if (pids) {
+      for (const pid of pids.split('\n')) {
+        try { process.kill(Number(pid), 'SIGKILL'); } catch {}
+      }
+      // Brief wait for process to die
+      execSync('sleep 1');
+      console.log(`Killed stale process(es) on port ${port}: ${pids.replace(/\n/g, ', ')}`);
+    }
+  } catch {
+    // No process on port — fine
+  }
+}
+
 function startInterpretarr(): ChildProcess {
-  const child = spawn('npm', ['run', 'dev:server'], {
+  // Kill any stale process from a previous test run
+  killPortProcess(INTERPRETARR_PORT);
+
+  // Use tsx directly (not tsx watch) to avoid restarts mid-translation
+  const child = spawn('npx', ['tsx', 'src/server/index.ts'], {
     cwd: PROJECT_DIR,
     stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, PORT: String(INTERPRETARR_PORT) },
