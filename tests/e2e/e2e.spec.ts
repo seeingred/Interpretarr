@@ -21,8 +21,10 @@ const DATA_BACKUP = path.join(TMP_DIR, 'data-backup');
 // Source of MKV test media (public domain films)
 const MEDIA_SOURCE = path.resolve(PROJECT_DIR, '../Interpretarr_e2e');
 
-const RADARR_URL = 'http://localhost:7878';
-const INTERPRETARR_URL = 'http://localhost:3000';
+const RADARR_PORT = 17878;
+const RADARR_URL = `http://localhost:${RADARR_PORT}`;
+const INTERPRETARR_PORT = 13000;
+const INTERPRETARR_URL = `http://localhost:${INTERPRETARR_PORT}`;
 
 // ── Test movies ──────────────────────────────────────────────────────────────
 const MOVIES = [
@@ -138,7 +140,7 @@ function writeDockerCompose(): void {
       - ${MOVIES_DIR}:${MOVIES_DIR}
       - ${MEDIA_SOURCE}:${MEDIA_SOURCE}:ro
     ports:
-      - "7878:7878"
+      - "${RADARR_PORT}:7878"
     restart: "no"
 `;
 
@@ -246,7 +248,7 @@ function startInterpretarr(): ChildProcess {
   const child = spawn('npm', ['run', 'dev:server'], {
     cwd: PROJECT_DIR,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, PORT: '3000' },
+    env: { ...process.env, PORT: String(INTERPRETARR_PORT) },
     detached: false,
   });
 

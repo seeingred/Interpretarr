@@ -14,7 +14,7 @@ export default defineConfig({
   workers: 1,
   reporter: 'html',
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: 'http://localhost:13000',
     screenshot: 'on',
     trace: 'on-first-retry',
     actionTimeout: 15_000,
