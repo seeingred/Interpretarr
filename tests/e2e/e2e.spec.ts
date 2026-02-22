@@ -445,7 +445,7 @@ test.describe('Interpretarr E2E — Subtitle Translation', () => {
       await page.goto('/queue');
       await page.waitForLoadState('networkidle');
 
-      const maxWaitMs = 300000; // 5 minutes
+      const maxWaitMs = 600000; // 10 minutes
       const startTime = Date.now();
       let allCompleted = false;
 

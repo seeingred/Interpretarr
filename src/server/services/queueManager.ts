@@ -46,7 +46,7 @@ export class QueueManager {
       INSERT INTO queue (type, item_id, item_name, subtitle_file, subtitle_stream_id, target_language, status, progress)
       VALUES (?, ?, ?, ?, ?, ?, 'pending', 0)
     `);
-    const result = stmt.run(item.type, item.item_id, item.item_name, item.subtitle_file, item.subtitle_stream_id || null, item.target_language);
+    const result = stmt.run(item.type, item.item_id, item.item_name, item.subtitle_file, item.subtitle_stream_id ?? null, item.target_language);
     this.logger.info(`Added to queue: ${item.item_name} -> ${item.target_language}`);
     this.triggerProcessNext();
     return this.getQueueItem(result.lastInsertRowid as number)!;
