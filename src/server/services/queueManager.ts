@@ -152,8 +152,12 @@ export class QueueManager {
         }
       } catch (err: any) {
         if (!abortController.signal.aborted) {
-          this.db.prepare("UPDATE queue SET status = 'failed', error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
-            .run(err.message || 'Unknown error', next.id);
+          try {
+            this.db.prepare("UPDATE queue SET status = 'failed', error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+              .run(err.message || 'Unknown error', next.id);
+          } catch (dbErr: any) {
+            this.logger.error(`Failed to update queue status: ${dbErr.message}`);
+          }
           this.logger.error(`Failed: ${next.item_name} - ${err.message}`);
         }
       } finally {

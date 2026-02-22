@@ -284,6 +284,10 @@ function stopInterpretarr(): void {
 
 test.describe('Interpretarr E2E — Subtitle Translation', () => {
   test.beforeAll(async () => {
+    // Kill any stale Interpretarr from a prior run FIRST —
+    // before backupDataDir() deletes the DB out from under it
+    killPortProcess(INTERPRETARR_PORT);
+
     // Validate environment
     getGeminiApiKey();
 
@@ -401,7 +405,7 @@ test.describe('Interpretarr E2E — Subtitle Translation', () => {
 
       // Verify settings are applied
       const settingsResp = await fetch(`${INTERPRETARR_URL}/api/settings`);
-      const settings = await settingsResp.json();
+      const settings = (await settingsResp.json()) as any;
       expect(settings.isConfigured).toBe(true);
       console.log('Settings configured successfully.');
 

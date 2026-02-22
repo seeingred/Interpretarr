@@ -15,6 +15,7 @@ export function initializeDatabase() {
   }
 
   db = new Database(dbPath);
+  db.pragma('journal_mode = WAL');
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS queue (
