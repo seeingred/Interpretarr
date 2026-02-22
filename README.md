@@ -22,22 +22,36 @@ AI-powered subtitle translation server for Radarr/Sonarr. Built-in Gemini AI tra
 
 ## Quick Start
 
+### Docker Compose (recommended)
+
+```bash
+git clone https://github.com/seeingred/Interpretarr.git
+cd Interpretarr
+```
+
+Edit `docker-compose.yml` and replace `/path/to/media` with your media directory, then:
+
+```bash
+docker compose up -d
+```
+
+To rebuild after pulling updates:
+
+```bash
+docker compose up -d --build
+```
+
 ### Docker
 
 ```bash
-# Build the image
-git clone https://github.com/seeingred/Interpretarr.git
-cd Interpretarr
 docker build -t interpretarr .
-
-# Run the container
 docker run -d --name interpretarr -p 3000:3000 \
   -v ./data:/app/data \
   -v /path/to/media:/media:ro \
   interpretarr
 ```
 
-The media volume (`/path/to/media`) should point to the same root media directory that Sonarr/Radarr use. Mount it read-only (`:ro`) since Interpretarr only reads video files to discover subtitles.
+The media volume should point to the same root media directory that Sonarr/Radarr use. Mount it read-only (`:ro`) since Interpretarr only reads video files to discover subtitles.
 
 ## Configuration
 

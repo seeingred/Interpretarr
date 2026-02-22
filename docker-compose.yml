@@ -1,0 +1,10 @@
+services:
+  interpretarr:
+    build: .
+    container_name: interpretarr
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data
+      - /path/to/media:/media:ro
+    restart: unless-stopped
