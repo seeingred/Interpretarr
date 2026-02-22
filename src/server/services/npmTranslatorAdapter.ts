@@ -1,4 +1,4 @@
-import { translate } from 'ai-sub-translator';
+import { translate, extractSubtitle } from 'ai-sub-translator';
 import { readFileSync, writeFileSync } from 'fs';
 import { TranslatorService } from './translatorService.js';
 import { SettingsService } from './settings.js';
@@ -21,7 +21,12 @@ export class NpmTranslatorAdapter implements TranslatorService {
 
     if (!apiKey) throw new Error('Gemini API key not configured');
 
-    const subtitleContent = readFileSync(options.subtitlePath, 'utf-8');
+    let subtitleContent: string;
+    if (options.streamId !== undefined) {
+      subtitleContent = await extractSubtitle(options.subtitlePath, options.streamId);
+    } else {
+      subtitleContent = readFileSync(options.subtitlePath, 'utf-8');
+    }
 
     const result = await translate({
       text: subtitleContent,
@@ -34,7 +39,7 @@ export class NpmTranslatorAdapter implements TranslatorService {
       signal: options.signal,
     });
 
-    // Save output file
+    // Save output file next to the source video/subtitle
     const ext = path.extname(options.subtitlePath);
     const base = options.subtitlePath.slice(0, -ext.length);
     const outputPath = `${base}.${options.targetLanguage}.srt`;

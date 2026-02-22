@@ -10,7 +10,6 @@ const __dirname = path.dirname(__filename);
 // ── Paths ────────────────────────────────────────────────────────────────────
 const PROJECT_DIR = path.resolve(__dirname, '../..');
 const E2E_DIR = path.resolve(__dirname);
-const FIXTURES_DIR = path.join(E2E_DIR, 'fixtures');
 const TMP_DIR = path.join(E2E_DIR, 'tmp');
 const MOVIES_DIR = path.join(TMP_DIR, 'movies');
 const RADARR_CONFIG_DIR = path.join(TMP_DIR, 'radarr-config');
@@ -34,7 +33,6 @@ const MOVIES = [
     tmdbId: 67713,
     slug: 'popeye-the-sailor-meets-sindbad-the-sailor-1936',
     mkvFile: 'PopeyeMeetsSinbad.mkv',
-    srtFile: 'PopeyeMeetsSinbad.srt',
   },
   {
     title: 'St. Louis Blues',
@@ -42,7 +40,6 @@ const MOVIES = [
     tmdbId: 148941,
     slug: 'st-louis-blues-1929',
     mkvFile: 'StLouisBlues.mkv',
-    srtFile: 'StLouisBlues.srt',
   },
 ];
 
@@ -107,16 +104,6 @@ function setupMovieFiles(): void {
     if (!fs.existsSync(dstMkv)) {
       fs.symlinkSync(srcMkv, dstMkv);
     }
-
-    // Copy SRT fixture file (small, ~5-10 KB)
-    const srcSrt = path.join(FIXTURES_DIR, movie.srtFile);
-    const dstSrt = path.join(movieDir, movie.srtFile);
-    if (!fs.existsSync(srcSrt)) {
-      throw new Error(
-        `Subtitle fixture not found: ${srcSrt}. Run: ffmpeg -i "${srcMkv}" -map 0:2 -c:s srt "${srcSrt}" -y`
-      );
-    }
-    fs.copyFileSync(srcSrt, dstSrt);
   }
 }
 
@@ -294,7 +281,7 @@ test.describe('Interpretarr E2E — Subtitle Translation', () => {
     fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
     fs.mkdirSync(RADARR_CONFIG_DIR, { recursive: true });
 
-    // Set up movie files (symlink MKVs, copy SRTs)
+    // Set up movie files (symlink MKVs)
     console.log('Setting up movie files...');
     setupMovieFiles();
 
@@ -540,7 +527,7 @@ test.describe('Interpretarr E2E — Subtitle Translation', () => {
 
       for (const movie of MOVIES) {
         const movieDir = path.join(MOVIES_DIR, movie.slug);
-        const baseName = movie.srtFile.replace('.srt', '');
+        const baseName = movie.mkvFile.replace('.mkv', '');
         const frenchSrtPath = path.join(movieDir, `${baseName}.fr.srt`);
 
         // Check file exists
