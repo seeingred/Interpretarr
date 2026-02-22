@@ -27,6 +27,7 @@ AI-powered subtitle translation server for Radarr/Sonarr. Built-in Gemini AI tra
 ```bash
 git clone https://github.com/seeingred/Interpretarr.git
 cd Interpretarr
+cp docker-compose.example.yml docker-compose.yml
 ```
 
 Edit `docker-compose.yml` and replace `/path/to/media` with your media directory, then:

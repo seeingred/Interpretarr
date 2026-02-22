@@ -145,6 +145,10 @@ CLAUDE.md
 ai-sub-translator/
 data
 
+# Docker (user-specific compose)
+docker-compose.yml
+!docker-compose.example.yml
+
 # Playwright
 tests/e2e/tmp/
 tests/e2e/screenshots/
