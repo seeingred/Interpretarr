@@ -22,7 +22,7 @@ export class NpmTranslatorAdapter implements TranslatorService {
     if (!apiKey) throw new Error('Gemini API key not configured');
 
     let subtitleContent: string;
-    if (options.streamId !== undefined) {
+    if (options.streamId != null) {
       subtitleContent = await extractSubtitle(options.subtitlePath, options.streamId);
     } else {
       subtitleContent = readFileSync(options.subtitlePath, 'utf-8');

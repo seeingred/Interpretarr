@@ -93,6 +93,11 @@ async function pollUntilReady(
 function setupMovieFiles(): void {
   for (const movie of MOVIES) {
     const movieDir = path.join(MOVIES_DIR, movie.slug);
+
+    // Clean stale files from prior runs (e.g. translated .fr.srt files)
+    if (fs.existsSync(movieDir)) {
+      fs.rmSync(movieDir, { recursive: true, force: true });
+    }
     fs.mkdirSync(movieDir, { recursive: true });
 
     // Symlink MKV file (avoid copying ~580 MB each)
@@ -101,9 +106,7 @@ function setupMovieFiles(): void {
     if (!fs.existsSync(srcMkv)) {
       throw new Error(`Source MKV not found: ${srcMkv}`);
     }
-    if (!fs.existsSync(dstMkv)) {
-      fs.symlinkSync(srcMkv, dstMkv);
-    }
+    fs.symlinkSync(srcMkv, dstMkv);
   }
 }
 
@@ -411,8 +414,9 @@ test.describe('Interpretarr E2E — Subtitle Translation', () => {
         });
 
         // Subtitle file should be auto-selected in the dropdown
+        // First run may download FFmpeg (~20 MB), allow extra time
         await expect(page.locator('select').first()).toBeVisible({
-          timeout: 5000,
+          timeout: 180000,
         });
 
         // Set target language to French
