@@ -19,7 +19,8 @@ RUN npm run build:server
 FROM node:20-alpine
 WORKDIR /app
 
-# Install production dependencies
+# Install system ffmpeg and production dependencies
+RUN apk add --no-cache ffmpeg
 COPY package*.json ./
 RUN npm ci --production && \
     npm cache clean --force

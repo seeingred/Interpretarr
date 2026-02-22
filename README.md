@@ -66,14 +66,14 @@ The media volume must be mounted at the **same path** inside the container as Ra
 | Setting | Description | Default |
 |---------|-------------|---------|
 | Gemini API Key | Google Gemini API key for translation | -- |
-| Gemini Model | AI model to use | `gemini-2.0-flash` |
+| Gemini Model | AI model to use | `gemini-2.5-flash` |
 | Batch Size | Number of subtitles per translation batch | `50` |
 | Sonarr URL | Sonarr server URL | -- |
 | Sonarr API Key | Sonarr API key | -- |
 | Radarr URL | Radarr server URL | -- |
 | Radarr API Key | Radarr API key | -- |
 
-Available Gemini models: `gemini-2.0-flash` (recommended), `gemini-2.5-flash`, `gemini-1.5-flash`, `gemini-1.5-flash-8b`. All models have a free tier.
+Available Gemini models: `gemini-2.5-flash` (recommended, default), `gemini-2.5-flash-lite`, `gemini-3-flash`. All models have a free tier.
 
 ## Usage
 

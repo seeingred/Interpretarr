@@ -18,7 +18,7 @@ export class NpmTranslatorAdapter implements TranslatorService {
     signal: AbortSignal;
   }): Promise<string> {
     const apiKey = this.settings.getSetting('geminiApiKey');
-    const model = this.settings.getSetting('geminiModel') || 'gemini-2.0-flash';
+    const model = this.settings.getSetting('geminiModel') || 'gemini-2.5-flash';
     const batchSize = parseInt(this.settings.getSetting('batchSize') || '50', 10);
 
     if (!apiKey) throw new Error('Gemini API key not configured');
