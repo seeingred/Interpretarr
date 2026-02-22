@@ -144,3 +144,9 @@ CLAUDE.md
 .DS_Store
 ai-sub-translator/
 data
+
+# Playwright
+tests/e2e/tmp/
+tests/e2e/screenshots/
+playwright-report/
+test-results/

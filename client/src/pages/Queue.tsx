@@ -82,26 +82,26 @@ function Queue() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active':
-        return 'text-blue-400';
+        return 'text-blue-600 dark:text-blue-400';
       case 'completed':
-        return 'text-green-400';
+        return 'text-green-600 dark:text-green-400';
       case 'failed':
-        return 'text-red-400';
+        return 'text-red-600 dark:text-red-400';
       default:
-        return 'text-gray-400';
+        return 'text-gray-500 dark:text-gray-400';
     }
   };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'active':
-        return 'bg-blue-900/50 text-blue-400 border-blue-600';
+        return 'bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 border-blue-300 dark:border-blue-600';
       case 'completed':
-        return 'bg-green-900/50 text-green-400 border-green-600';
+        return 'bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-400 border-green-300 dark:border-green-600';
       case 'failed':
-        return 'bg-red-900/50 text-red-400 border-red-600';
+        return 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400 border-red-300 dark:border-red-600';
       default:
-        return 'bg-gray-900/50 text-gray-400 border-gray-600';
+        return 'bg-gray-100 dark:bg-gray-600 text-gray-600 dark:text-gray-200 border-gray-300 dark:border-gray-500';
     }
   };
 
@@ -124,41 +124,41 @@ function Queue() {
       </div>
 
       {queue.length === 0 ? (
-        <div className="bg-gray-800 rounded-lg p-8 text-center text-gray-400">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-8 text-center text-gray-500 dark:text-gray-400">
           <p>Queue is empty</p>
         </div>
       ) : (
-        <div className="bg-gray-800 rounded-lg overflow-hidden">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
           <table className="w-full">
-            <thead className="bg-gray-700">
+            <thead className="bg-gray-100 dark:bg-gray-700">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Item
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Type
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Language
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Progress
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-700">
+            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
               {queue.map((item) => (
-                <tr key={item.id}>
+                <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div>
                       <div className="text-sm font-medium">{item.item_name}</div>
-                      <div className="text-xs text-gray-400">
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
                         {item.subtitle_file.split('/').pop()}
                       </div>
                     </div>
@@ -181,13 +181,13 @@ function Queue() {
                   <td className="px-6 py-4 whitespace-nowrap">
                     {item.status === 'active' ? (
                       <div className="w-24">
-                        <div className="bg-gray-700 rounded-full h-2">
+                        <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                           <div
                             className="bg-blue-500 h-2 rounded-full transition-all"
                             style={{ width: `${item.progress}%` }}
                           />
                         </div>
-                        <span className="text-xs text-gray-400 mt-1">
+                        <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                           {item.progress}%
                         </span>
                       </div>
@@ -204,7 +204,7 @@ function Queue() {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <button
                       onClick={() => removeItem(item.id, item.status === 'active')}
-                      className="text-red-400 hover:text-red-300 transition-colors"
+                      className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors"
                       title={item.status === 'active' ? 'Cancel and remove translation' : 'Remove from queue'}
                     >
                       <TrashIcon className="h-5 w-5" />
@@ -218,12 +218,12 @@ function Queue() {
       )}
 
       {queue.some((item) => item.status === 'failed') && (
-        <div className="mt-4 bg-red-900/20 border border-red-600 rounded-lg p-4">
-          <h3 className="text-sm font-medium text-red-400 mb-2">Failed Items</h3>
+        <div className="mt-4 bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-600 rounded-lg p-4">
+          <h3 className="text-sm font-medium text-red-600 dark:text-red-400 mb-2">Failed Items</h3>
           {queue
             .filter((item) => item.status === 'failed')
             .map((item) => (
-              <div key={item.id} className="text-sm text-red-300 mb-1">
+              <div key={item.id} className="text-sm text-red-500 dark:text-red-300 mb-1">
                 {item.item_name}: {item.error || 'Unknown error'}
               </div>
             ))}

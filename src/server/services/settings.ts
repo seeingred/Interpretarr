@@ -2,8 +2,9 @@ import { getDb } from '../db/database.js';
 import { logger } from '../utils/logger.js';
 
 export interface Settings {
-  aiSubTranslatorUrl?: string;
-  aiSubTranslatorApiKey?: string;
+  geminiApiKey?: string;
+  geminiModel?: string;
+  batchSize?: string;
   sonarrApiKey?: string;
   sonarrUrl?: string;
   radarrApiKey?: string;
@@ -41,8 +42,9 @@ export class SettingsService {
 
   getAllSettings(): Settings {
     return {
-      aiSubTranslatorUrl: this.getSetting('aiSubTranslatorUrl'),
-      aiSubTranslatorApiKey: this.getSetting('aiSubTranslatorApiKey'),
+      geminiApiKey: this.getSetting('geminiApiKey'),
+      geminiModel: this.getSetting('geminiModel'),
+      batchSize: this.getSetting('batchSize'),
       sonarrApiKey: this.getSetting('sonarrApiKey'),
       sonarrUrl: this.getSetting('sonarrUrl'),
       radarrApiKey: this.getSetting('radarrApiKey'),
@@ -51,11 +53,14 @@ export class SettingsService {
   }
 
   updateSettings(settings: Partial<Settings>): void {
-    if (settings.aiSubTranslatorUrl !== undefined) {
-      this.setSetting('aiSubTranslatorUrl', settings.aiSubTranslatorUrl);
+    if (settings.geminiApiKey !== undefined) {
+      this.setSetting('geminiApiKey', settings.geminiApiKey);
     }
-    if (settings.aiSubTranslatorApiKey !== undefined) {
-      this.setSetting('aiSubTranslatorApiKey', settings.aiSubTranslatorApiKey);
+    if (settings.geminiModel !== undefined) {
+      this.setSetting('geminiModel', settings.geminiModel);
+    }
+    if (settings.batchSize !== undefined) {
+      this.setSetting('batchSize', settings.batchSize);
     }
     if (settings.sonarrApiKey !== undefined) {
       this.setSetting('sonarrApiKey', settings.sonarrApiKey);
@@ -74,8 +79,7 @@ export class SettingsService {
   isConfigured(): boolean {
     const settings = this.getAllSettings();
     return !!(
-      settings.aiSubTranslatorUrl &&
-      settings.aiSubTranslatorApiKey &&
+      settings.geminiApiKey &&
       (settings.sonarrApiKey || settings.radarrApiKey)
     );
   }

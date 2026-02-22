@@ -1,34 +1,33 @@
 import { FastifyInstance } from 'fastify';
-import { AiSubTranslatorService } from '../services/aiSubTranslator.js';
 import path from 'path';
+import fs from 'fs';
 
 export async function setupSubtitleRoutes(fastify: FastifyInstance) {
-  const translatorService = AiSubTranslatorService.getInstance();
-
   fastify.post('/subtitles/available', async (request, reply) => {
     const { videoPath } = request.body as { videoPath: string };
 
     try {
-      const subtitles = await translatorService.getAvailableSubtitles(videoPath);
+      const videoDir = path.dirname(videoPath);
+      const videoBase = path.basename(videoPath, path.extname(videoPath));
+      const subtitles: any[] = [];
 
-      // Handle both external and embedded subtitles
-      return subtitles.map(subtitle => {
-        if (subtitle.type === 'external') {
-          return {
-            path: subtitle.path,
-            filename: subtitle.filename,
-            type: 'external'
-          };
-        } else {
-          // Embedded subtitle
-          return {
-            path: videoPath,
-            filename: `Stream ${subtitle.id}: ${subtitle.language || 'unknown'} (${subtitle.title || subtitle.format || 'embedded'})`,
-            type: 'embedded',
-            streamId: subtitle.id
-          };
+      if (fs.existsSync(videoDir)) {
+        const files = fs.readdirSync(videoDir);
+        for (const file of files) {
+          const isSubtitle = ['.srt', '.ass', '.vtt', '.sub'].some(ext =>
+            file.toLowerCase().endsWith(ext)
+          );
+          if (isSubtitle && file.toLowerCase().includes(videoBase.toLowerCase())) {
+            subtitles.push({
+              path: path.join(videoDir, file),
+              filename: file,
+              type: 'external'
+            });
+          }
         }
-      });
+      }
+
+      return subtitles;
     } catch (error) {
       reply.code(500);
       return { error: 'Failed to fetch subtitles' };

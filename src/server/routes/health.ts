@@ -1,22 +1,16 @@
 import { FastifyInstance } from 'fastify';
-import { AiSubTranslatorService } from '../services/aiSubTranslator.js';
 import { APP_VERSION } from '../../version.js';
 
 export async function setupHealthRoutes(fastify: FastifyInstance) {
-  const translatorService = AiSubTranslatorService.getInstance();
-
   fastify.get('/version', async (request, reply) => {
     return { version: APP_VERSION };
   });
 
   fastify.get('/health', async (request, reply) => {
-    const translatorHealth = await translatorService.checkServerHealth();
-
     return {
       status: 'ok',
       services: {
         interpretarr: true,
-        aiSubTranslator: translatorHealth
       }
     };
   });

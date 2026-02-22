@@ -1,201 +1,254 @@
 # Interpretarr - Project Knowledge
 
 ## Overview
-Interpretarr is a Radarr/Sonarr stack extension server that handles AI-powered subtitle translation using **ai-sub-translator** in headless mode. It provides a web interface for browsing media from Sonarr/Radarr, selecting subtitles, and managing a translation queue.
 
-## Architecture
+Interpretarr is an AI-powered subtitle translation server that integrates with Radarr and Sonarr. It provides a web UI for browsing media, selecting subtitles, and managing a translation queue. Translation is handled by the `ai-sub-translator` npm module, which calls the Google Gemini API directly -- no external translation service is required.
 
-### Tech Stack
-- **Backend:** TypeScript, Node.js, Fastify
-- **Frontend:** React, TypeScript, Vite, TailwindCSS
-- **Database:** SQLite with better-sqlite3 (embedded)
-- **Translation Engine:** ai-sub-translator via JSON-RPC API
-- **Logging:** Pino logger with file-based persistence
-- **Deployment:** Docker (Alpine Linux)
+## Tech Stack
+
+- **Backend**: Fastify, TypeScript, Node.js 20+
+- **Database**: SQLite via better-sqlite3 (embedded, file-based)
+- **Frontend**: React 19, Vite 7, Tailwind CSS v4, React Router v7, Headless UI
+- **Translation**: `ai-sub-translator` npm module (Google Gemini API)
+- **Logging**: Pino with pino-pretty, file-based persistence
+- **Testing**: Vitest with @vitest/coverage-v8
+- **Deployment**: Docker (Alpine Linux, multi-stage build)
 
 ## Key Components
 
-### Queue Manager
-- **FIFO Processing:** Items processed in order of addition (oldest first)
-- **Single Active Job:** Only one translation at a time (ai-sub-translator limitation)
-- **Status Tracking:** pending → active → completed/failed
-- **Auto-start:** Queue processing begins automatically when items are added
-- **Progress Updates:** Real-time progress from ai-sub-translator
+### QueueManager (`src/server/services/queueManager.ts`)
+- Event-driven FIFO queue processor
+- Dependency injection: receives `Database`, `TranslatorService`, and `Logger` via constructor
+- Uses `AbortController` for cancellation of active translations
+- `recover()` method marks stale active items as failed on server restart
+- Uses `queueMicrotask()` to trigger async processing without blocking
+- Status flow: `pending` -> `active` -> `completed` | `failed`
+- Only one item active at a time; automatically picks up next pending item
 
-### ai-sub-translator Integration
-ai-sub-translator IS AN ELECTRON APP needs to be build!
-Uses JSON-RPC API.
-Look at the ~/work/ai-sub-translator - there are all the docs and source code
-Also available on github (the branch is process-video for headless mode): https://github.com/seeingred/ai-sub-translator/tree/feature/process-video
-**Important:** The service expects ai-sub-translator to be running in headless mode
+### NpmTranslatorAdapter (`src/server/services/npmTranslatorAdapter.ts`)
+- Implements `TranslatorService` interface
+- Wraps the `ai-sub-translator` npm module's `translate()` function
+- Reads settings (apiKey, model, batchSize) from `SettingsService`
+- Reads subtitle file from disk, calls translate, writes output file
+- Output naming: `{base}.{targetLanguage}.srt`
 
-### Settings Service
-- **Auto-save:** Settings save on field blur in the UI
-- **Configuration Check:** `isConfigured()` validates required settings
-- **Keys Stored:**
-  - `aiSubTranslatorUrl` - Server URL (default: http://host.docker.internal:9090)
-  - `aiSubTranslatorApiKey` - Gemini API key (encrypted)
-  - `sonarrApiKey` - Sonarr API key
-  - `sonarrUrl` - Sonarr server URL
-  - `radarrApiKey` - Radarr API key
-  - `radarrUrl` - Radarr server URL
+### TranslatorService (`src/server/services/translatorService.ts`)
+- Interface with single `translate()` method
+- Accepts: subtitlePath, targetLanguage, context, streamId, onProgress callback, AbortSignal
+- Returns: path to translated SRT file
+
+### SettingsService (`src/server/services/settings.ts`)
+- Singleton pattern (`getInstance()`)
+- Key-value store backed by SQLite `settings` table
+- `isConfigured()`: requires geminiApiKey and at least one of sonarrApiKey or radarrApiKey
+
+## Database Schema
+
+Located at `data/interpretarr.db`. Initialized in `src/server/db/database.ts`.
+
+### queue table
+| Column | Type | Notes |
+|--------|------|-------|
+| id | INTEGER | Primary key, autoincrement |
+| type | TEXT | `movie` or `episode` |
+| item_id | TEXT | Sonarr/Radarr item ID |
+| item_name | TEXT | Display name |
+| subtitle_file | TEXT | Path to subtitle file |
+| subtitle_stream_id | INTEGER | Optional, for embedded subtitles |
+| target_language | TEXT | Target language code |
+| status | TEXT | `pending`, `active`, `completed`, `failed` |
+| progress | INTEGER | 0-100 |
+| error | TEXT | Error message on failure |
+| created_at | DATETIME | Auto-set |
+| updated_at | DATETIME | Auto-set |
+
+Indexes: `idx_queue_status`, `idx_queue_status_created`.
+
+### settings table
+| Column | Type | Notes |
+|--------|------|-------|
+| key | TEXT | Primary key |
+| value | TEXT | Setting value |
+
+## Settings Keys
+
+- `geminiApiKey` - Google Gemini API key
+- `geminiModel` - Gemini model name (default: `gemini-2.0-flash`)
+- `batchSize` - Subtitles per translation batch (default: `50`)
+- `sonarrUrl` - Sonarr server URL
+- `sonarrApiKey` - Sonarr API key
+- `radarrUrl` - Radarr server URL
+- `radarrApiKey` - Radarr API key
 
 ## API Endpoints
 
+All endpoints are prefixed with `/api`.
+
 ### Settings
-- `GET /api/settings` - Get all settings
-- `PUT /api/settings` - Update settings (auto-encrypts sensitive fields)
+- `GET /api/settings` - Returns all settings plus `isConfigured` boolean
+- `PUT /api/settings` - Partial update of settings
 
 ### Queue
-- `GET /api/queue` - Get queue items (sorted by status and creation time)
-- `POST /api/queue` - Add item to queue
-- `DELETE /api/queue/:id` - Remove item (fails if active)
+- `GET /api/queue` - List all queue items (sorted: active, pending, completed, failed)
+- `POST /api/queue` - Add item to queue (body: `QueueItemInput`)
+- `DELETE /api/queue/:id` - Remove or cancel a queue item
 - `DELETE /api/queue` - Clear all non-active items
 
-### Media Integration
+### Sonarr
 - `GET /api/sonarr/series` - List all TV series
-- `GET /api/sonarr/series/:id/episodes` - Get episodes for a series
-- `GET /api/radarr/movies` - List all movies
+- `GET /api/sonarr/series/:id/episodes` - List episodes with file paths
+
+### Radarr
+- `GET /api/radarr/movies` - List all movies with file paths
 
 ### Subtitles
-- `POST /api/subtitles/available` - Find subtitle files for a video
+- `POST /api/subtitles/available` - Find external subtitle files for a video (body: `{ videoPath }`)
 
 ### System
-- `GET /api/health` - Health check
-- `GET /api/logs/stream` - Server-sent events log stream
+- `GET /api/health` - Health check (`{ status: "ok" }`)
+- `GET /api/version` - App version
+- `GET /api/logs` - Last 500 log lines (formatted)
+- `GET /api/logs/stream` - SSE log stream
 
-## Business Logic
+## UI Architecture
 
-### Translation Workflow
-1. User selects media item (movie/episode)
-2. UI fetches available subtitle files for the video
-3. User selects subtitle and target language
-4. Item added to queue with status 'pending'
-5. Queue manager picks up item (FIFO)
-6. Status changes to 'active', translation begins
-7. Progress updates every 2 seconds
-8. On completion, file saved as `filename.{language}.srt`
-9. Status changes to 'completed' or 'failed'
+React SPA served as static files by Fastify. SPA catch-all handler serves `index.html` for non-API routes.
 
-### File Naming Convention
-Translated subtitles are saved with language code suffix:
-- Input: `Movie.2024.1080p.srt`
-- Output: `Movie.2024.1080p.es.srt` (for Spanish)
+### Pages
+- **Queue** (`/`, `/queue`) - Translation queue with progress bars, cancel/remove actions
+- **Series** (`/series`) - Browse Sonarr series and episodes, trigger translations
+- **Movies** (`/movies`) - Browse Radarr movies, trigger translations
+- **Settings** (`/settings`) - Configure API keys and service URLs (auto-saves on blur)
+- **Logs** (`/logs`) - View application logs
 
-### Error Handling
-- **Missing Configuration:** UI shows warning banner
-- **API Failures:** Logged and shown in queue status
-- **Translation Failures:** Marked as failed with error message
-- **Network Issues:** Automatic retry with exponential backoff
+### Components
+- `Layout` - Sidebar navigation, header with config status and version
+- `TranslateDialog` - Modal for selecting subtitle file and target language
 
-## UI/UX Design
+### Theme
+- Light and dark mode via Tailwind CSS v4, follows system preference (`prefers-color-scheme`)
+- Navigation items conditionally enabled based on Sonarr/Radarr configuration
 
-### Layout Structure
-- **Header:** App title, configuration status and version number
-- **Sidebar:** Navigation menu (Series/Movies/Queue/Settings/Logs)
-- **Main Content:** Page-specific content
-- **Footer:** App information
+## Translation Workflow
 
-### Navigation States
-- Series menu: Enabled only if Sonarr configured
-- Movies menu: Enabled only if Radarr configured
-- Other menus: Always available
+1. User selects media item (movie or episode) from Series/Movies page
+2. UI calls `POST /api/subtitles/available` with the video file path
+3. User picks a subtitle file and target language in the TranslateDialog
+4. UI calls `POST /api/queue` to add the translation job
+5. QueueManager picks up the pending item (FIFO)
+6. NpmTranslatorAdapter reads the subtitle file, calls `ai-sub-translator` `translate()`
+7. Progress callbacks update the queue item in the database
+8. On success, translated file saved as `{base}.{targetLanguage}.srt`
+9. Queue item marked `completed` (or `failed` with error message)
+10. QueueManager automatically processes the next pending item
 
-### Translation Dialog
-Modal with:
-- Subtitle file selector (dropdown)
-- Target language input (text with datalist)
-- Popular languages quick select
-- Add to Queue button
+## File Structure
 
-### Queue Display
-Table showing:
-- Item name and subtitle file
-- Type (movie/episode)
-- Target language
-- Status badge (color-coded)
-- Progress bar (for active items)
-- Remove action (disabled for active)
+```
+Interpretarr/
+  src/
+    version.ts                          # App version constant
+    server/
+      index.ts                          # Fastify server entry point
+      db/
+        database.ts                     # SQLite initialization and schema
+      routes/
+        index.ts                        # Route registration (all under /api)
+        settings.ts                     # Settings CRUD
+        queue.ts                        # Queue CRUD
+        sonarr.ts                       # Sonarr proxy routes
+        radarr.ts                       # Radarr proxy routes
+        subtitles.ts                    # Subtitle file discovery
+        health.ts                       # Health, version, log stream
+        logs.ts                         # Log file reader
+      services/
+        queueManager.ts                 # FIFO queue processor
+        translatorService.ts            # Translator interface
+        npmTranslatorAdapter.ts         # ai-sub-translator adapter
+        settings.ts                     # Settings singleton
+        sonarr.ts                       # Sonarr API client
+        radarr.ts                       # Radarr API client
+      utils/
+        logger.ts                       # Pino logger setup
+  client/
+    src/
+      main.tsx                          # React entry point
+      App.tsx                           # Router and app shell
+      components/
+        Layout.tsx                      # Sidebar, header, outlet
+        TranslateDialog.tsx             # Translation modal
+      pages/
+        Queue.tsx                       # Queue management page
+        Series.tsx                      # Sonarr series browser
+        Movies.tsx                      # Radarr movies browser
+        Settings.tsx                    # Settings form
+        Logs.tsx                        # Log viewer
+      services/
+        api.ts                          # Axios HTTP client
+  tests/
+    setup.ts                            # Test setup
+    version.test.ts                     # Version tests
+    server/
+      db/database.test.ts              # Database tests
+      routes/
+        queue.test.ts                   # Queue route tests
+        health.test.ts                  # Health route tests
+      services/
+        queueManager.test.ts           # QueueManager unit tests
+        settings.test.ts               # Settings tests
+        sonarr.test.ts                 # Sonarr service tests
+        radarr.test.ts                 # Radarr service tests
+        aiSubTranslator.test.ts        # Translator adapter tests
+      utils/
+        logger.test.ts                 # Logger tests
+  Dockerfile                            # Multi-stage Docker build
+  package.json                          # Server dependencies and scripts
+  client/package.json                   # Client dependencies
+  tsconfig.server.json                  # Server TypeScript config
+  vitest.config.ts                      # Vitest configuration
+```
 
-## Deployment
+## Testing
 
-### Docker
-Multi-stage build:
-1. Build client (Node + Vite)
-2. Build server (TypeScript)
-3. Production image (Alpine Linux)
+Uses Vitest. Tests are in the `tests/` directory.
 
-### Docker Configuration
-- **Port:** 3000 (Interpretarr web interface)
-- **Volumes:**
-  - `/app/data` - SQLite database and application logs
-  - Media directory - Must match paths between host and container
-- **Network:** Use `host.docker.internal` to access host services from container (Mac/Windows)
+```bash
+npm test                  # Run all tests
+npm run test:watch        # Watch mode
+npm run test:coverage     # Coverage report
+npm run test:server       # Server tests only
+npm run test:client       # Client tests only
+npm run test:ui           # Vitest UI
+```
 
-### Data Persistence
-- `/app/data/interpretarr.db` - SQLite database
-- `/app/data/app.log` - Application logs
-- Media files accessed with matching paths between host and container
+Always run tests after making code changes. New features should include tests.
 
-## Testing Strategy
+## Development
 
-### Unit Tests
-- Queue FIFO logic
-- Settings encryption/decryption
-- API key validation
+```bash
+npm run dev               # Start server + client in dev mode (concurrently)
+npm run dev:server        # Server only (tsx watch)
+npm run dev:client        # Client only (vite dev server)
+npm run build             # Build server + client for production
+npm run typecheck         # TypeScript type checking
+npm run lint              # ESLint
+```
 
-### Integration Tests
-- End-to-end translation flow
-- JSON-RPC communication
-- File naming and output
+- Frontend dev server proxies `/api` requests to the backend on port 3000
+- Database file is created at `data/interpretarr.db`
+- Logs use Pino with pretty printing in development, JSON in production
+- Log file: `/app/data/app.log` (in Docker)
 
-### UI Tests
-- Navigation states based on configuration
-- Dialog interactions
-- Queue management actions
+## Docker
 
-## Performance Considerations
+Multi-stage build in `Dockerfile`:
 
-- **Single Translation:** Only one active translation (API limitation)
-- **Polling Interval:** 2 seconds for progress updates
-- **Database:** SQLite sufficient for queue/settings
-- **Memory:** Subtitle content held in memory during processing
-- **File Access:** Write access to media directories
+1. **client-builder**: Installs client deps, builds React app with Vite
+2. **server-builder**: Installs server deps, compiles TypeScript
+3. **production**: Copies built assets, installs production deps only
 
-## Known Limitations
-
-1. **Single Translation:** ai-sub-translator only handles one job at a time
-2. **File Access:** Requires matching paths between host and container for media files
-3. **Language Codes:** Uses 2-letter ISO codes
-4. **Progress Accuracy:** Based on batch completion, not time
-5. **Docker Networking:** On Mac/Windows, use `host.docker.internal` to access host services
-
-## Future Improvements
-
-- Webhook support for Sonarr/Radarr events
-- Batch subtitle selection
-- Translation history and statistics
-- Custom translation models
-- Subtitle format conversion
-- Multi-user support with authentication
-
-## Development Tips
-
-- Run `npm run dev` to start both frontend and backend
-- Frontend proxies `/api` to backend on port 3000
-- Use `npm run typecheck` to validate TypeScript
-- Database file created at `data/interpretarr.db`
-- Logs use Pino with pretty printing in development
-
-### Testing Requirements
-
-**IMPORTANT:** Always run tests after making any code changes:
-- Run `npm test` to execute all tests
-- Run `npm run test:coverage` to verify 100% code coverage
-- Tests must pass with 100% coverage before committing changes
-- Use `npm run test:watch` for continuous testing during development
-- All new features must include comprehensive unit tests
-
-## My personal deployment
-
-- Designed to run on Raspberry Pi media servers for personal deployment
+Configuration:
+- Port: 3000
+- Volumes: `/app/data` (database + logs), media directory (read-only)
+- Health check: `GET /api/health` every 30s
+- Environment: `NODE_ENV=production`, `PORT=3000`

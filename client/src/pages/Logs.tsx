@@ -51,13 +51,13 @@ function Logs() {
         </div>
       </div>
 
-      <div className="bg-gray-900 rounded-lg p-4 h-[600px] overflow-auto">
-        <pre className="text-xs text-gray-300 font-mono">
+      <div className="bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4 h-[600px] overflow-auto">
+        <pre className="text-xs text-gray-700 dark:text-gray-300 font-mono">
           {logs.length === 0 ? (
-            <span className="text-gray-500">No logs captured...</span>
+            <span className="text-gray-400 dark:text-gray-500">No logs captured...</span>
           ) : (
             logs.map((log, index) => (
-              <div key={index} className="hover:bg-gray-800">
+              <div key={index} className="hover:bg-gray-200 dark:hover:bg-gray-800">
                 {log}
               </div>
             ))

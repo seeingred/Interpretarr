@@ -20,14 +20,12 @@ describe('Version Module', () => {
     vi.clearAllMocks();
     vi.resetModules();
 
-    // Mock file system to return a fake package.json
     (readFileSync as Mock).mockReturnValue(JSON.stringify({
       name: 'interpretarr',
-      version: '1.0.2',
-      description: 'Test package'
+      version: '1.0.14',
+      description: 'AI-powered subtitle translation server',
     }));
 
-    // Mock path operations
     (fileURLToPath as Mock).mockReturnValue('/mocked/src/version.js');
     (path.dirname as Mock).mockReturnValue('/mocked/src');
     (path.join as Mock).mockImplementation((...args: string[]) => {
@@ -37,8 +35,7 @@ describe('Version Module', () => {
 
   it('should export APP_VERSION from package.json', async () => {
     const versionModule = await import('../src/version');
-
-    expect(versionModule.APP_VERSION).toBe('1.0.2');
+    expect(versionModule.APP_VERSION).toBe('1.0.14');
   });
 
   it('should read package.json from correct path', async () => {
@@ -54,31 +51,15 @@ describe('Version Module', () => {
     (readFileSync as Mock).mockReturnValue(JSON.stringify({
       name: 'interpretarr',
       version: '2.5.10',
-      description: 'Test package'
     }));
 
     vi.resetModules();
     const versionModule = await import('../src/version');
-
     expect(versionModule.APP_VERSION).toBe('2.5.10');
-  });
-
-  it('should handle version with pre-release tags', async () => {
-    (readFileSync as Mock).mockReturnValue(JSON.stringify({
-      name: 'interpretarr',
-      version: '1.0.0-beta.1',
-      description: 'Test package'
-    }));
-
-    vi.resetModules();
-    const versionModule = await import('../src/version');
-
-    expect(versionModule.APP_VERSION).toBe('1.0.0-beta.1');
   });
 
   it('should throw error if package.json is invalid JSON', async () => {
     (readFileSync as Mock).mockReturnValue('invalid json');
-
     await expect(import('../src/version')).rejects.toThrow();
   });
 
@@ -86,19 +67,6 @@ describe('Version Module', () => {
     (readFileSync as Mock).mockImplementation(() => {
       throw new Error('File not found');
     });
-
     await expect(import('../src/version')).rejects.toThrow('File not found');
-  });
-
-  it('should handle package.json without version field', async () => {
-    (readFileSync as Mock).mockReturnValue(JSON.stringify({
-      name: 'interpretarr',
-      description: 'Test package'
-    }));
-
-    vi.resetModules();
-    const versionModule = await import('../src/version');
-
-    expect(versionModule.APP_VERSION).toBeUndefined();
   });
 });

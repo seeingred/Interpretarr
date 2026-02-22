@@ -36,6 +36,9 @@ export function initializeDatabase() {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+
+    CREATE INDEX IF NOT EXISTS idx_queue_status ON queue(status);
+    CREATE INDEX IF NOT EXISTS idx_queue_status_created ON queue(status, created_at);
   `);
 
   // Add migration for existing databases

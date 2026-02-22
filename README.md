@@ -1,167 +1,134 @@
 # Interpretarr
 
-AI-powered subtitle translation server for Radarr/Sonarr using [ai-sub-translator](https://github.com/your-repo/ai-sub-translator).
+AI-powered subtitle translation server for Radarr/Sonarr. Built-in Gemini AI translation -- no external services needed.
 
 ## Features
 
-- 🎬 **Seamless Integration** - Works with your existing Sonarr and Radarr setup
-- 🤖 **AI Translation** - Powered by Google Gemini for accurate translations
-- 📺 **Series & Movies** - Browse and translate subtitles for TV shows and films
-- 📊 **Queue Management** - FIFO processing with real-time progress tracking
-- 🔒 **Secure** - Encrypted storage for API keys
-- 🌐 **Multi-language** - Translate to any language supported by Gemini
+- Seamless Radarr/Sonarr integration
+- Built-in AI translation powered by Google Gemini (free tier available)
+- No external translation service required
+- Series and Movies support
+- FIFO queue with real-time progress
+- Light and dark mode (follows system preference)
+- Encrypted API key storage
+- Multi-language support
+- Docker ready
 
 ## Prerequisites
 
-- Node.js 20+ (for standalone) or Docker
-- [ai-sub-translator](https://github.com/your-repo/ai-sub-translator) running in headless mode
-- Gemini API key
-- Sonarr/Radarr installation (at least one of them, for media browsing)
+- Node.js 20+ or Docker
+- Gemini API key (free at [Google AI Studio](https://aistudio.google.com/))
+- Sonarr and/or Radarr
 
-## Installation
+## Quick Start
 
-### Docker (Standalone)
-
-Clone the repository:
-```bash
-git clone https://github.com/seeingred/Interpretarr.git
-cd interpretarr
-```
+### Docker
 
 ```bash
 # Build the image
+git clone https://github.com/seeingred/Interpretarr.git
+cd Interpretarr
 docker build -t interpretarr .
 
 # Run the container
-docker run -d \
-  --name interpretarr \
-  -p 3000:3000 \
+docker run -d --name interpretarr -p 3000:3000 \
   -v ./data:/app/data \
   -v /path/to/media:/media:ro \
-  -e AI_SUB_TRANSLATOR_URL=http://ai-sub-translator:9090 \
   interpretarr
 ```
 
+The media volume (`/path/to/media`) should point to the same root media directory that Sonarr/Radarr use. Mount it read-only (`:ro`) since Interpretarr only reads video files to discover subtitles.
+
 ## Configuration
 
-### First-Time Setup
+1. Open Interpretarr at `http://localhost:3000`
+2. Navigate to **Settings**
+3. Enter your **Gemini API key**
+4. Configure **Sonarr** and/or **Radarr** URLs and API keys
 
-1. **Start ai-sub-translator** in headless mode:
-```bash
-./ai-sub-translator --headless
-```
+### Settings
 
-2. **Access Interpretarr** at `http://localhost:3000`
+| Setting | Description | Default |
+|---------|-------------|---------|
+| Gemini API Key | Google Gemini API key for translation | -- |
+| Gemini Model | AI model to use | `gemini-2.0-flash` |
+| Batch Size | Number of subtitles per translation batch | `50` |
+| Sonarr URL | Sonarr server URL | -- |
+| Sonarr API Key | Sonarr API key | -- |
+| Radarr URL | Radarr server URL | -- |
+| Radarr API Key | Radarr API key | -- |
 
-3. **Configure Settings**:
-   - Navigate to Settings
-   - Enter ai-sub-translator URL (default: `http://host.docker.internal:9090`)
-   - Enter your Gemini API key
-   - Configure Sonarr/Radarr integration (at least one of them):
-     - Sonarr URL and API key
-     - Radarr URL and API key
+Available Gemini models: `gemini-2.0-flash` (recommended), `gemini-2.5-flash`, `gemini-1.5-flash`, `gemini-1.5-flash-8b`. All models have a free tier.
 
 ## Usage
 
 ### Translating Subtitles
 
-1. **For Series**:
-   - Navigate to Series
-   - Select a show
-   - Click "Translate" on an episode
-   - Choose subtitle file and target language
-   - Click "Add to Queue"
+1. Navigate to **Series** or **Movies**
+2. Select the media item
+3. Click **Translate** on an episode or movie
+4. Choose the subtitle file and target language
+5. Click **Add to Queue**
 
-2. **For Movies**:
-   - Navigate to Movies
-   - Click "Translate" on a movie
-   - Choose subtitle file and target language
-   - Click "Add to Queue"
+### Queue
 
-3. **Monitor Progress**:
-   - Go to Queue page
-   - View real-time translation progress
-   - Completed translations are saved as `filename.languageCode.srt`
-
-### Queue Management
-
-- Translations are processed one at a time (FIFO)
-- Active translations cannot be removed
-- Use "Clear Queue" to remove all pending/completed items
+- Translations are processed one at a time in FIFO order
+- Monitor real-time progress on the Queue page
+- Active translations can be cancelled
+- Use **Clear Queue** to remove all non-active items
+- Translated files are saved as `filename.{languageCode}.srt`
 
 ## API Endpoints
 
-Interpretarr exposes a REST API for integration:
-
-- `GET /api/health` - Health check
-- `GET /api/settings` - Get settings
-- `PUT /api/settings` - Update settings
-- `GET /api/queue` - Get queue status
-- `POST /api/queue` - Add to queue
-- `DELETE /api/queue/:id` - Remove from queue
-- `GET /api/sonarr/series` - List series
-- `GET /api/sonarr/series/:id/episodes` - List episodes
-- `GET /api/radarr/movies` - List movies
-- `POST /api/subtitles/available` - Get available subtitles
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/health` | Health check |
+| `GET` | `/api/version` | Application version |
+| `GET` | `/api/settings` | Get all settings |
+| `PUT` | `/api/settings` | Update settings |
+| `GET` | `/api/queue` | Get queue items |
+| `POST` | `/api/queue` | Add item to queue |
+| `DELETE` | `/api/queue/:id` | Remove/cancel queue item |
+| `DELETE` | `/api/queue` | Clear all non-active items |
+| `GET` | `/api/sonarr/series` | List TV series from Sonarr |
+| `GET` | `/api/sonarr/series/:id/episodes` | List episodes for a series |
+| `GET` | `/api/radarr/movies` | List movies from Radarr |
+| `POST` | `/api/subtitles/available` | Find subtitle files for a video |
+| `GET` | `/api/logs` | Get application logs |
+| `GET` | `/api/logs/stream` | Server-sent events log stream |
 
 ## Development
 
-### Running in Development Mode
-
 ```bash
-# Start both backend and frontend
+# Install dependencies
+npm install
+cd client && npm install && cd ..
+
+# Start both backend and frontend in dev mode
 npm run dev
 
-# Backend only
-npm run dev:server
-
-# Frontend only
-cd client && npm run dev
-```
-
-### Running Tests
-
-```bash
-# Run all tests
+# Run tests
 npm test
 
-# With coverage
+# Run tests with coverage
 npm run test:coverage
 
-# Watch mode
-npm run test:watch
-```
+# Type checking
+npm run typecheck
 
-### Building from Source
-
-```bash
-# Build everything
+# Build for production
 npm run build
-
-# Build server only
-npm run build:server
-
-# Build client only
-npm run build:client
 ```
 
-### Logs
+## Architecture
 
-- Application logs: `data/interpretarr.log`
-- Docker logs: `docker logs interpretarr`
-- Browser console for frontend issues
+Interpretarr is a full-stack TypeScript application:
 
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+- **Backend**: Fastify server with SQLite (better-sqlite3) for persistence
+- **Frontend**: React SPA with Tailwind CSS v4, served as static files
+- **Translation**: Uses the `ai-sub-translator` npm module which calls the Google Gemini API directly
+- **Queue**: Event-driven FIFO processor with AbortController cancellation and crash recovery
 
 ## License
 
-MIT License - see LICENSE file for details
-
-## Credits
-
-- [ai-sub-translator](https://github.com/your-repo/ai-sub-translator) - The translation engine
-- [Sonarr](https://sonarr.tv/) - TV show management
-- [Radarr](https://radarr.video/) - Movie management
-- Google Gemini - AI translation model
+MIT

@@ -1,561 +1,489 @@
-import { describe, it, expect, beforeEach, afterEach, vi, Mock } from 'vitest';
-import { QueueManager, QueueItem } from '../../../src/server/services/queueManager';
-import * as database from '../../../src/server/db/database';
-import * as logger from '../../../src/server/utils/logger';
-import { AiSubTranslatorService } from '../../../src/server/services/aiSubTranslator';
-
-// Mock dependencies
-vi.mock('../../../src/server/db/database');
-vi.mock('../../../src/server/utils/logger');
-vi.mock('../../../src/server/services/aiSubTranslator');
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { QueueManager, QueueItemInput } from '../../../src/server/services/queueManager';
+import { TranslatorService } from '../../../src/server/services/translatorService';
 
 describe('QueueManager', () => {
+  let mockTranslator: TranslatorService;
+  let mockLogger: any;
   let mockDb: any;
-  let mockTranslator: any;
-  let queueManager: QueueManager;
+
+  // Helper to build a mock db that handles SQL-based dispatch
+  function createMockDb() {
+    const runFn = vi.fn().mockReturnValue({ lastInsertRowid: 1 });
+    const getFn = vi.fn();
+    const allFn = vi.fn().mockReturnValue([]);
+
+    return {
+      prepare: vi.fn((sql: string) => {
+        // processNext queries that need special handling
+        if (sql.includes('SELECT COUNT(*)')) {
+          return { get: vi.fn().mockReturnValue({ count: 0 }) };
+        }
+        if (sql.includes("SELECT * FROM queue WHERE status = 'pending' ORDER BY")) {
+          return { get: vi.fn().mockReturnValue(undefined) };
+        }
+        if (sql.includes("SELECT * FROM queue WHERE status = 'active'")) {
+          return { all: vi.fn().mockReturnValue([]) };
+        }
+        return { run: runFn, get: getFn, all: allFn };
+      }),
+      _run: runFn,
+      _get: getFn,
+      _all: allFn,
+    };
+  }
 
   beforeEach(() => {
-    vi.clearAllMocks();
-    vi.useFakeTimers();
-
-    // Reset singleton instance
-    (QueueManager as any).instance = undefined;
-
-    // Mock database
-    mockDb = {
-      prepare: vi.fn(),
-      exec: vi.fn(),
-    };
-    (database.getDb as Mock).mockReturnValue(mockDb);
-
-    // Mock logger
-    (logger.logger as any) = {
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-      debug: vi.fn(),
-    };
-
-    // Mock translator
     mockTranslator = {
-      translateSubtitle: vi.fn(),
-      cancelTranslation: vi.fn(),
-      hasActiveTranslation: vi.fn().mockResolvedValue(false),
+      translate: vi.fn().mockResolvedValue('/output/translated.srt'),
     };
-    (AiSubTranslatorService.getInstance as Mock).mockReturnValue(mockTranslator);
 
-    queueManager = QueueManager.getInstance();
-  });
+    mockLogger = {
+      info: vi.fn(),
+      error: vi.fn(),
+      warn: vi.fn(),
+    };
 
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  describe('getInstance', () => {
-    it('should return singleton instance', () => {
-      const instance1 = QueueManager.getInstance();
-      const instance2 = QueueManager.getInstance();
-      expect(instance1).toBe(instance2);
-    });
-
-    it('should create new instance if none exists', () => {
-      (QueueManager as any).instance = undefined;
-      const instance = QueueManager.getInstance();
-      expect(instance).toBeInstanceOf(QueueManager);
-    });
-  });
-
-  describe('constructor', () => {
-    it('should set up interval for queue processing', () => {
-      const setIntervalSpy = vi.spyOn(global, 'setInterval');
-      (QueueManager as any).instance = undefined;
-      new QueueManager();
-      expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 5000);
-    });
+    mockDb = createMockDb();
   });
 
   describe('addToQueue', () => {
-    it('should add item to database queue', async () => {
-      const mockRun = vi.fn().mockReturnValue({ lastInsertRowid: 123 });
-      mockDb.prepare.mockReturnValue({ run: mockRun });
+    it('should insert item into database', () => {
+      // Make the get call (for getQueueItem) return the inserted item
+      const insertedItem = {
+        id: 1, type: 'movie', item_id: 'movie-1', item_name: 'Test Movie',
+        subtitle_file: '/path/to/sub.srt', subtitle_stream_id: null,
+        target_language: 'es', status: 'pending', progress: 0,
+      };
+      mockDb._get.mockReturnValue(insertedItem);
 
-      const item: Omit<QueueItem, 'id'> = {
+      const queueManager = new QueueManager(mockDb, mockTranslator, mockLogger);
+      const result = queueManager.addToQueue({
         type: 'movie',
         item_id: 'movie-1',
         item_name: 'Test Movie',
-        subtitle_file: '/path/to/subtitle.srt',
+        subtitle_file: '/path/to/sub.srt',
         target_language: 'es',
-      };
+      });
 
-      const result = await queueManager.addToQueue(item);
-
-      expect(result).toBe(123);
+      expect(result).toEqual(insertedItem);
       expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO queue'));
-      expect(mockRun).toHaveBeenCalledWith(
-        'movie',
-        'movie-1',
-        'Test Movie',
-        '/path/to/subtitle.srt',
-        null,
-        'es'
+      expect(mockDb._run).toHaveBeenCalledWith(
+        'movie', 'movie-1', 'Test Movie', '/path/to/sub.srt', null, 'es'
       );
     });
 
-    it('should handle subtitle_stream_id when provided', async () => {
-      const mockRun = vi.fn().mockReturnValue({ lastInsertRowid: 124 });
-      mockDb.prepare.mockReturnValue({ run: mockRun });
+    it('should handle subtitle_stream_id', () => {
+      mockDb._get.mockReturnValue({ id: 1, subtitle_stream_id: 3 });
 
-      const item: Omit<QueueItem, 'id'> = {
+      const queueManager = new QueueManager(mockDb, mockTranslator, mockLogger);
+      queueManager.addToQueue({
         type: 'episode',
         item_id: 'ep-1',
         item_name: 'Test Episode',
         subtitle_file: '/path/to/video.mkv',
         subtitle_stream_id: 3,
         target_language: 'fr',
-      };
+      });
 
-      await queueManager.addToQueue(item);
-
-      expect(mockRun).toHaveBeenCalledWith(
-        'episode',
-        'ep-1',
-        'Test Episode',
-        '/path/to/video.mkv',
-        3,
-        'fr'
+      expect(mockDb._run).toHaveBeenCalledWith(
+        'episode', 'ep-1', 'Test Episode', '/path/to/video.mkv', 3, 'fr'
       );
     });
 
-    it('should add item without triggering immediate processing', async () => {
-      const mockRun = vi.fn().mockReturnValue({ lastInsertRowid: 125 });
-      mockDb.prepare.mockReturnValue({ run: mockRun });
+    it('should set subtitle_stream_id to null when not provided', () => {
+      mockDb._get.mockReturnValue({ id: 1, subtitle_stream_id: null });
 
-      const item: Omit<QueueItem, 'id'> = {
+      const queueManager = new QueueManager(mockDb, mockTranslator, mockLogger);
+      queueManager.addToQueue({
         type: 'movie',
         item_id: 'movie-2',
-        item_name: 'Test Movie 2',
-        subtitle_file: '/path/to/subtitle2.srt',
+        item_name: 'No Stream Movie',
+        subtitle_file: '/path/to/sub.srt',
         target_language: 'de',
-      };
+      });
 
-      await queueManager.addToQueue(item);
-
-      // Should only call INSERT, not SELECT
-      expect(mockDb.prepare).toHaveBeenCalledTimes(1);
-      expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO queue'));
+      expect(mockDb._run).toHaveBeenCalledWith(
+        'movie', 'movie-2', 'No Stream Movie', '/path/to/sub.srt', null, 'de'
+      );
     });
 
-    it('should log when adding item to queue', async () => {
-      const mockRun = vi.fn().mockReturnValue({ lastInsertRowid: 126 });
-      mockDb.prepare.mockReturnValue({ run: mockRun });
+    it('should log when adding to queue', () => {
+      mockDb._get.mockReturnValue({ id: 1 });
 
-      const item: Omit<QueueItem, 'id'> = {
+      const queueManager = new QueueManager(mockDb, mockTranslator, mockLogger);
+      queueManager.addToQueue({
         type: 'movie',
         item_id: 'movie-3',
-        item_name: 'Test Movie 3',
-        subtitle_file: '/path/to/subtitle3.srt',
+        item_name: 'Log Movie',
+        subtitle_file: '/path/to/sub.srt',
         target_language: 'it',
+      });
+
+      expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Log Movie'));
+    });
+
+    it('should return the inserted QueueItem', () => {
+      const item = {
+        id: 42, type: 'movie', item_id: '1', item_name: 'M',
+        subtitle_file: '/s.srt', target_language: 'es', status: 'pending', progress: 0,
       };
+      mockDb._run.mockReturnValue({ lastInsertRowid: 42 });
+      mockDb._get.mockReturnValue(item);
 
-      await queueManager.addToQueue(item);
+      const queueManager = new QueueManager(mockDb, mockTranslator, mockLogger);
+      const result = queueManager.addToQueue({
+        type: 'movie', item_id: '1', item_name: 'M',
+        subtitle_file: '/s.srt', target_language: 'es',
+      });
 
-      expect(logger.logger.info).toHaveBeenCalledWith(
-        expect.objectContaining({ item_name: 'Test Movie 3' }),
-        'Adding item to queue with details'
-      );
+      expect(result.id).toBe(42);
     });
   });
 
   describe('getQueue', () => {
-    it('should return all queue items ordered by status and creation time', () => {
-      const mockItems: QueueItem[] = [
-        { id: 1, type: 'movie', item_id: '1', item_name: 'Movie 1', subtitle_file: 'sub1.srt', target_language: 'es', status: 'active' },
-        { id: 2, type: 'movie', item_id: '2', item_name: 'Movie 2', subtitle_file: 'sub2.srt', target_language: 'fr', status: 'pending' },
-        { id: 3, type: 'episode', item_id: '3', item_name: 'Episode 1', subtitle_file: 'sub3.srt', target_language: 'de', status: 'completed' },
+    it('should return items sorted by status then date', () => {
+      const mockItems = [
+        { id: 1, status: 'active' },
+        { id: 2, status: 'pending' },
+        { id: 3, status: 'completed' },
       ];
+      mockDb._all.mockReturnValue(mockItems);
 
-      const mockAll = vi.fn().mockReturnValue(mockItems);
-      mockDb.prepare.mockReturnValue({ all: mockAll });
-
+      const queueManager = new QueueManager(mockDb, mockTranslator, mockLogger);
       const result = queueManager.getQueue();
 
       expect(result).toEqual(mockItems);
       expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('ORDER BY'));
-      expect(mockAll).toHaveBeenCalled();
     });
 
     it('should return empty array when queue is empty', () => {
-      const mockAll = vi.fn().mockReturnValue([]);
-      mockDb.prepare.mockReturnValue({ all: mockAll });
+      mockDb._all.mockReturnValue([]);
 
-      const result = queueManager.getQueue();
-
-      expect(result).toEqual([]);
+      const queueManager = new QueueManager(mockDb, mockTranslator, mockLogger);
+      expect(queueManager.getQueue()).toEqual([]);
     });
   });
 
   describe('removeFromQueue', () => {
-    it('should remove non-active item from queue', async () => {
-      const mockGet = vi.fn().mockReturnValue({
-        id: 1,
-        item_name: 'Test Movie',
-        status: 'pending',
-      });
-      const mockRun = vi.fn();
+    it('should remove a pending item', () => {
+      mockDb._get.mockReturnValue({ id: 1, item_name: 'Pending', status: 'pending' });
 
-      mockDb.prepare.mockImplementation((sql: string) => {
-        if (sql.includes('SELECT')) return { get: mockGet };
-        if (sql.includes('DELETE')) return { run: mockRun };
-      });
+      const queueManager = new QueueManager(mockDb, mockTranslator, mockLogger);
+      queueManager.removeFromQueue(1);
 
-      await queueManager.removeFromQueue(1);
-
-      expect(mockGet).toHaveBeenCalledWith(1);
-      expect(mockRun).toHaveBeenCalledWith(1);
-      expect(logger.logger.info).toHaveBeenCalledWith('Removed from queue: 1');
+      expect(mockDb.prepare).toHaveBeenCalledWith('DELETE FROM queue WHERE id = ?');
+      expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('Pending'));
     });
 
-    it('should throw error when trying to remove active item without force', async () => {
-      const mockGet = vi.fn().mockReturnValue({
-        id: 2,
-        item_name: 'Active Movie',
-        status: 'active',
-      });
+    it('should remove a completed item', () => {
+      mockDb._get.mockReturnValue({ id: 1, item_name: 'Done', status: 'completed' });
 
-      mockDb.prepare.mockReturnValue({ get: mockGet });
+      const queueManager = new QueueManager(mockDb, mockTranslator, mockLogger);
+      queueManager.removeFromQueue(1);
 
-      await expect(queueManager.removeFromQueue(2, false)).rejects.toThrow(
-        'Cannot remove active translation without cancellation'
-      );
-      expect(logger.logger.warn).toHaveBeenCalledWith(
-        'Cannot remove active item without cancellation: Active Movie'
-      );
+      expect(mockDb.prepare).toHaveBeenCalledWith('DELETE FROM queue WHERE id = ?');
     });
 
-    it('should handle non-existent item', async () => {
-      const mockGet = vi.fn().mockReturnValue(undefined);
-      const mockRun = vi.fn();
+    it('should remove a failed item', () => {
+      mockDb._get.mockReturnValue({ id: 1, item_name: 'Failed', status: 'failed' });
 
-      mockDb.prepare.mockImplementation((sql: string) => {
-        if (sql.includes('SELECT')) return { get: mockGet };
-        if (sql.includes('DELETE')) return { run: mockRun };
-      });
+      const queueManager = new QueueManager(mockDb, mockTranslator, mockLogger);
+      queueManager.removeFromQueue(1);
 
-      await queueManager.removeFromQueue(999);
+      expect(mockDb.prepare).toHaveBeenCalledWith('DELETE FROM queue WHERE id = ?');
+    });
 
-      expect(mockRun).toHaveBeenCalledWith(999);
+    it('should throw when item not found', () => {
+      mockDb._get.mockReturnValue(undefined);
+
+      const queueManager = new QueueManager(mockDb, mockTranslator, mockLogger);
+      expect(() => queueManager.removeFromQueue(999)).toThrow('Item not found');
+    });
+
+    it('should cancel active item instead of deleting', () => {
+      mockDb._get.mockReturnValue({ id: 1, item_name: 'Active', status: 'active' });
+
+      const queueManager = new QueueManager(mockDb, mockTranslator, mockLogger);
+      queueManager.removeFromQueue(1);
+
+      // Should update status to failed, not delete
+      expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining("status = 'failed'"));
+      expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('Cancelled by user'));
+    });
+  });
+
+  describe('cancelActive', () => {
+    it('should mark active item as failed with cancellation message', () => {
+      const queueManager = new QueueManager(mockDb, mockTranslator, mockLogger);
+      queueManager.cancelActive(1);
+
+      expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining("status = 'failed'"));
+      expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('Cancelled by user'));
+      expect(mockDb._run).toHaveBeenCalledWith(1);
+    });
+
+    it('should log cancellation', () => {
+      const queueManager = new QueueManager(mockDb, mockTranslator, mockLogger);
+      queueManager.cancelActive(1);
+
+      expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('1'));
     });
   });
 
   describe('clearQueue', () => {
-    it('should delete all non-active items from queue', () => {
-      const mockRun = vi.fn();
-      mockDb.prepare.mockReturnValue({ run: mockRun });
-
+    it('should remove non-active items', () => {
+      const queueManager = new QueueManager(mockDb, mockTranslator, mockLogger);
       queueManager.clearQueue();
 
       expect(mockDb.prepare).toHaveBeenCalledWith("DELETE FROM queue WHERE status != 'active'");
-      expect(mockRun).toHaveBeenCalled();
-      expect(logger.logger.info).toHaveBeenCalledWith('Queue cleared (except active items)');
+    });
+
+    it('should log the clear operation', () => {
+      const queueManager = new QueueManager(mockDb, mockTranslator, mockLogger);
+      queueManager.clearQueue();
+
+      expect(mockLogger.info).toHaveBeenCalledWith('Queue cleared');
     });
   });
 
-  describe('processQueue', () => {
-    it('should process pending item successfully', async () => {
-      const pendingItem: QueueItem = {
-        id: 1,
-        type: 'movie',
-        item_id: 'movie-1',
-        item_name: 'Test Movie',
-        subtitle_file: '/path/to/subtitle.srt',
-        target_language: 'es',
-        status: 'pending',
+  describe('recover', () => {
+    function createRecoverDb(staleItems: any[]) {
+      const runFn = vi.fn();
+      return {
+        db: {
+          prepare: vi.fn((sql: string) => {
+            if (sql.includes("SELECT * FROM queue WHERE status = 'active'")) {
+              return { all: vi.fn().mockReturnValue(staleItems) };
+            }
+            if (sql.includes("UPDATE queue SET status = 'failed'")) {
+              return { run: runFn };
+            }
+            if (sql.includes('SELECT COUNT(*)')) {
+              return { get: vi.fn().mockReturnValue({ count: 0 }) };
+            }
+            if (sql.includes("SELECT * FROM queue WHERE status = 'pending'")) {
+              return { get: vi.fn().mockReturnValue(undefined) };
+            }
+            return { run: vi.fn(), get: vi.fn(), all: vi.fn().mockReturnValue([]) };
+          }),
+        } as any,
+        runFn,
       };
+    }
 
-      const mockGet = vi.fn()
-        .mockReturnValueOnce(pendingItem)  // First call returns pending item
-        .mockReturnValueOnce(undefined);    // Second call returns nothing
+    it('should mark stale active items as failed', () => {
+      const { db } = createRecoverDb([
+        { id: 1, status: 'active' },
+        { id: 2, status: 'active' },
+      ]);
 
-      const mockRun = vi.fn();
+      const queueManager = new QueueManager(db, mockTranslator, mockLogger);
+      queueManager.recover();
 
-      mockDb.prepare.mockImplementation((sql: string) => {
-        if (sql.includes('SELECT')) return { get: mockGet };
-        if (sql.includes('UPDATE')) return { run: mockRun };
-      });
-
-      mockTranslator.translateSubtitle.mockImplementation(
-        async (_file: string, _lang: string, progressCb: Function) => {
-          progressCb(50);
-          progressCb(100);
-        }
-      );
-
-      // Trigger processQueue via interval
-      vi.advanceTimersByTime(5000);
-      await vi.runOnlyPendingTimersAsync();
-
-      expect(mockTranslator.translateSubtitle).toHaveBeenCalledWith(
-        '/path/to/subtitle.srt',
-        'es',
-        expect.any(Function),
-        undefined
-      );
-
-      // Should update status to active, then progress, then completed
-      expect(mockRun).toHaveBeenCalledTimes(4); // active, progress 50, progress 100, completed
+      expect(db.prepare).toHaveBeenCalledWith(expect.stringContaining("status = 'failed'"));
+      expect(db.prepare).toHaveBeenCalledWith(expect.stringContaining('Server restarted during translation'));
     });
 
-    it('should handle translation failure', async () => {
-      const pendingItem: QueueItem = {
-        id: 2,
-        type: 'episode',
-        item_id: 'ep-1',
-        item_name: 'Test Episode',
-        subtitle_file: '/path/to/video.mkv',
-        subtitle_stream_id: 2,
-        target_language: 'fr',
-        status: 'pending',
-      };
+    it('should log warning for recovered items', () => {
+      const { db } = createRecoverDb([{ id: 1, status: 'active' }]);
 
-      const mockGet = vi.fn()
-        .mockReturnValueOnce(pendingItem)
-        .mockReturnValueOnce(undefined);
+      const queueManager = new QueueManager(db, mockTranslator, mockLogger);
+      queueManager.recover();
 
-      const mockRun = vi.fn();
-
-      mockDb.prepare.mockImplementation((sql: string) => {
-        if (sql.includes('SELECT')) return { get: mockGet };
-        if (sql.includes('UPDATE')) return { run: mockRun };
-      });
-
-      const error = new Error('Translation failed');
-      mockTranslator.translateSubtitle.mockRejectedValue(error);
-
-      vi.advanceTimersByTime(5000);
-      await vi.runOnlyPendingTimersAsync();
-
-      expect(logger.logger.error).toHaveBeenCalledWith(
-        'Translation failed: Test Episode - Translation failed'
-      );
-
-      // Check that status was updated to failed with error message
-      const failedCall = mockRun.mock.calls.find(call =>
-        call.includes('failed') && call.includes('Translation failed')
-      );
-      expect(failedCall).toBeDefined();
+      expect(mockLogger.warn).toHaveBeenCalledWith(expect.stringContaining('1'));
     });
 
-    it('should not process if already processing', async () => {
-      (queueManager as any).isProcessing = true;
+    it('should do nothing when no stale items exist', () => {
+      const { db } = createRecoverDb([]);
 
-      const mockGet = vi.fn();
-      mockDb.prepare.mockReturnValue({ get: mockGet });
+      const queueManager = new QueueManager(db, mockTranslator, mockLogger);
+      queueManager.recover();
 
-      vi.advanceTimersByTime(5000);
-      await vi.runOnlyPendingTimersAsync();
-
-      expect(mockGet).not.toHaveBeenCalled();
-    });
-
-    it('should skip processing when no pending items', async () => {
-      const mockGet = vi.fn().mockReturnValue(undefined);
-      mockDb.prepare.mockReturnValue({ get: mockGet });
-
-      vi.advanceTimersByTime(5000);
-      await vi.runOnlyPendingTimersAsync();
-
-      expect(mockTranslator.translateSubtitle).not.toHaveBeenCalled();
-    });
-
-    it('should handle subtitle_stream_id in translation', async () => {
-      const pendingItem: QueueItem = {
-        id: 3,
-        type: 'movie',
-        item_id: 'movie-3',
-        item_name: 'Embedded Subtitle Movie',
-        subtitle_file: '/path/to/movie.mkv',
-        subtitle_stream_id: 5,
-        target_language: 'ja',
-        status: 'pending',
-      };
-
-      const mockGet = vi.fn()
-        .mockReturnValueOnce(pendingItem)
-        .mockReturnValueOnce(undefined);
-
-      const mockRun = vi.fn();
-
-      mockDb.prepare.mockImplementation((sql: string) => {
-        if (sql.includes('SELECT')) return { get: mockGet };
-        if (sql.includes('UPDATE')) return { run: mockRun };
-      });
-
-      mockTranslator.translateSubtitle.mockResolvedValue(undefined);
-
-      vi.advanceTimersByTime(5000);
-      await vi.runOnlyPendingTimersAsync();
-
-      expect(mockTranslator.translateSubtitle).toHaveBeenCalledWith(
-        '/path/to/movie.mkv',
-        'ja',
-        expect.any(Function),
-        5
-      );
-    });
-
-    it('should retry processing after completion', async () => {
-      const pendingItem1: QueueItem = {
-        id: 1,
-        type: 'movie',
-        item_id: 'movie-1',
-        item_name: 'First Movie',
-        subtitle_file: '/path/to/first.srt',
-        target_language: 'es',
-        status: 'pending',
-      };
-
-      const pendingItem2: QueueItem = {
-        id: 2,
-        type: 'movie',
-        item_id: 'movie-2',
-        item_name: 'Second Movie',
-        subtitle_file: '/path/to/second.srt',
-        target_language: 'fr',
-        status: 'pending',
-      };
-
-      const mockGet = vi.fn()
-        .mockReturnValueOnce(pendingItem1)
-        .mockReturnValueOnce(pendingItem2)
-        .mockReturnValueOnce(undefined);
-
-      const mockRun = vi.fn();
-
-      mockDb.prepare.mockImplementation((sql: string) => {
-        if (sql.includes('SELECT')) return { get: mockGet };
-        if (sql.includes('UPDATE')) return { run: mockRun };
-      });
-
-      mockTranslator.translateSubtitle.mockResolvedValue(undefined);
-
-      // Process first item
-      vi.advanceTimersByTime(5000);
-      await vi.runOnlyPendingTimersAsync();
-
-      // Process second item after timeout
-      vi.advanceTimersByTime(1000);
-      await vi.runOnlyPendingTimersAsync();
-
-      expect(mockTranslator.translateSubtitle).toHaveBeenCalledTimes(2);
+      expect(mockLogger.warn).not.toHaveBeenCalled();
     });
   });
 
-  describe('updateQueueItem', () => {
-    it('should update queue item with provided fields', () => {
-      const mockRun = vi.fn();
-      mockDb.prepare.mockReturnValue({ run: mockRun });
+  describe('processNext (integration)', () => {
+    it('should process a pending item via translator', async () => {
+      // Set up mock db to simulate the flow:
+      // 1. addToQueue: INSERT + SELECT (getQueueItem)
+      // 2. processNext: SELECT active count, SELECT pending, UPDATE to active, translate, UPDATE to completed
+      // 3. Check pending count for continuation
 
-      (queueManager as any).updateQueueItem(1, {
-        status: 'completed',
-        progress: 100
-      });
-
-      expect(mockDb.prepare).toHaveBeenCalledWith(
-        expect.stringContaining('status = ?, progress = ?')
-      );
-      expect(mockRun).toHaveBeenCalledWith('completed', 100, 1);
-    });
-
-    it('should update single field', () => {
-      const mockRun = vi.fn();
-      mockDb.prepare.mockReturnValue({ run: mockRun });
-
-      (queueManager as any).updateQueueItem(2, { error: 'Test error' });
-
-      expect(mockDb.prepare).toHaveBeenCalledWith(
-        expect.stringContaining('error = ?')
-      );
-      expect(mockRun).toHaveBeenCalledWith('Test error', 2);
-    });
-
-    it('should include updated_at timestamp', () => {
-      const mockRun = vi.fn();
-      mockDb.prepare.mockReturnValue({ run: mockRun });
-
-      (queueManager as any).updateQueueItem(3, { status: 'active' });
-
-      expect(mockDb.prepare).toHaveBeenCalledWith(
-        expect.stringContaining('updated_at = CURRENT_TIMESTAMP')
-      );
-    });
-  });
-
-  describe('getCurrentItem', () => {
-    it('should return current processing item', () => {
-      const currentItem: QueueItem = {
-        id: 1,
-        type: 'movie',
-        item_id: 'movie-1',
-        item_name: 'Current Movie',
-        subtitle_file: '/path/to/current.srt',
-        target_language: 'es',
-        status: 'active',
+      let callCount = 0;
+      const pendingItem = {
+        id: 1, type: 'movie', item_id: '1', item_name: 'Test Movie',
+        subtitle_file: '/path.srt', subtitle_stream_id: null,
+        target_language: 'es', status: 'pending', progress: 0,
       };
 
-      (queueManager as any).currentItem = currentItem;
+      const runFn = vi.fn().mockReturnValue({ lastInsertRowid: 1 });
+      const getFn = vi.fn();
+      const allFn = vi.fn().mockReturnValue([]);
 
-      expect(queueManager.getCurrentItem()).toBe(currentItem);
-    });
-
-    it('should return null when no item is processing', () => {
-      (queueManager as any).currentItem = null;
-      expect(queueManager.getCurrentItem()).toBeNull();
-    });
-  });
-
-  describe('progress callback', () => {
-    it('should update progress during translation', async () => {
-      const pendingItem: QueueItem = {
-        id: 1,
-        type: 'movie',
-        item_id: 'movie-1',
-        item_name: 'Test Movie',
-        subtitle_file: '/path/to/subtitle.srt',
-        target_language: 'es',
-        status: 'pending',
-      };
-
-      const mockGet = vi.fn()
-        .mockReturnValueOnce(pendingItem)
-        .mockReturnValueOnce(undefined);
-
-      const mockRun = vi.fn();
-      const progressValues: number[] = [];
-
-      mockDb.prepare.mockImplementation((sql: string) => {
-        if (sql.includes('SELECT')) return { get: mockGet };
-        if (sql.includes('UPDATE')) return { run: mockRun };
-      });
-
-      mockTranslator.translateSubtitle.mockImplementation(
-        async (_file: string, _lang: string, progressCb: Function) => {
-          for (let i = 0; i <= 100; i += 25) {
-            progressCb(i);
-            progressValues.push(i);
+      const db: any = {
+        prepare: vi.fn((sql: string) => {
+          if (sql.includes('INSERT INTO queue')) {
+            return { run: runFn };
           }
-        }
+          if (sql.includes('SELECT * FROM queue WHERE id = ?')) {
+            return { get: getFn.mockReturnValue(pendingItem) };
+          }
+          if (sql.includes("SELECT COUNT(*) as count FROM queue WHERE status = 'active'")) {
+            return { get: vi.fn().mockReturnValue({ count: 0 }) };
+          }
+          if (sql.includes("SELECT * FROM queue WHERE status = 'pending'")) {
+            // Return pending item first time, undefined after
+            callCount++;
+            return { get: vi.fn().mockReturnValue(callCount <= 1 ? pendingItem : undefined) };
+          }
+          if (sql.includes("SELECT COUNT(*) as count FROM queue WHERE status = 'pending'")) {
+            return { get: vi.fn().mockReturnValue({ count: 0 }) };
+          }
+          return { run: vi.fn(), get: vi.fn(), all: allFn };
+        }),
+      };
+
+      const queueManager = new QueueManager(db, mockTranslator, mockLogger);
+      queueManager.addToQueue({
+        type: 'movie', item_id: '1', item_name: 'Test Movie',
+        subtitle_file: '/path.srt', target_language: 'es',
+      });
+
+      // Wait for microtask processing
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      expect(mockTranslator.translate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          subtitlePath: '/path.srt',
+          targetLanguage: 'es',
+          context: 'Test Movie',
+          signal: expect.any(AbortSignal),
+        })
+      );
+    });
+
+    it('should handle translator errors gracefully', async () => {
+      (mockTranslator.translate as ReturnType<typeof vi.fn>).mockRejectedValue(
+        new Error('Translation failed')
       );
 
-      vi.advanceTimersByTime(5000);
-      await vi.runOnlyPendingTimersAsync();
+      let callCount = 0;
+      const pendingItem = {
+        id: 1, type: 'movie', item_id: '1', item_name: 'Fail Movie',
+        subtitle_file: '/a.srt', subtitle_stream_id: undefined,
+        target_language: 'es', status: 'pending', progress: 0,
+      };
 
-      expect(progressValues).toEqual([0, 25, 50, 75, 100]);
+      const db: any = {
+        prepare: vi.fn((sql: string) => {
+          if (sql.includes('INSERT INTO queue')) {
+            return { run: vi.fn().mockReturnValue({ lastInsertRowid: 1 }) };
+          }
+          if (sql.includes('SELECT * FROM queue WHERE id = ?')) {
+            return { get: vi.fn().mockReturnValue(pendingItem) };
+          }
+          if (sql.includes("SELECT COUNT(*) as count FROM queue WHERE status = 'active'")) {
+            return { get: vi.fn().mockReturnValue({ count: 0 }) };
+          }
+          if (sql.includes("SELECT * FROM queue WHERE status = 'pending'")) {
+            callCount++;
+            return { get: vi.fn().mockReturnValue(callCount <= 1 ? pendingItem : undefined) };
+          }
+          if (sql.includes("SELECT COUNT(*) as count FROM queue WHERE status = 'pending'")) {
+            return { get: vi.fn().mockReturnValue({ count: 0 }) };
+          }
+          return { run: vi.fn(), get: vi.fn(), all: vi.fn().mockReturnValue([]) };
+        }),
+      };
 
-      // Verify progress updates were called
-      const progressCalls = mockRun.mock.calls.filter(call =>
-        typeof call[0] === 'number' && call[0] >= 0 && call[0] <= 100
+      const queueManager = new QueueManager(db, mockTranslator, mockLogger);
+      queueManager.addToQueue({
+        type: 'movie', item_id: '1', item_name: 'Fail Movie',
+        subtitle_file: '/a.srt', target_language: 'es',
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('Fail Movie'));
+      // Should update to 'failed' with error
+      expect(db.prepare).toHaveBeenCalledWith(expect.stringContaining("status = 'failed', error = ?"));
+    });
+
+    it('should skip processing if already processing', async () => {
+      // If there's already an active item, processNext should exit early
+      const db: any = {
+        prepare: vi.fn((sql: string) => {
+          if (sql.includes('INSERT INTO queue')) {
+            return { run: vi.fn().mockReturnValue({ lastInsertRowid: 1 }) };
+          }
+          if (sql.includes('SELECT * FROM queue WHERE id = ?')) {
+            return { get: vi.fn().mockReturnValue({ id: 1 }) };
+          }
+          if (sql.includes("SELECT COUNT(*) as count FROM queue WHERE status = 'active'")) {
+            return { get: vi.fn().mockReturnValue({ count: 1 }) };
+          }
+          if (sql.includes("SELECT COUNT(*) as count FROM queue WHERE status = 'pending'")) {
+            return { get: vi.fn().mockReturnValue({ count: 0 }) };
+          }
+          return { run: vi.fn(), get: vi.fn(), all: vi.fn().mockReturnValue([]) };
+        }),
+      };
+
+      const queueManager = new QueueManager(db, mockTranslator, mockLogger);
+      queueManager.addToQueue({
+        type: 'movie', item_id: '1', item_name: 'Should Skip',
+        subtitle_file: '/a.srt', target_language: 'es',
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      // Should not call translate because active count > 0
+      expect(mockTranslator.translate).not.toHaveBeenCalled();
+    });
+
+    it('should pass streamId to translator', async () => {
+      let callCount = 0;
+      const pendingItem = {
+        id: 1, type: 'movie', item_id: '1', item_name: 'Stream Movie',
+        subtitle_file: '/a.mkv', subtitle_stream_id: 5,
+        target_language: 'ja', status: 'pending', progress: 0,
+      };
+
+      const db: any = {
+        prepare: vi.fn((sql: string) => {
+          if (sql.includes('INSERT INTO queue')) {
+            return { run: vi.fn().mockReturnValue({ lastInsertRowid: 1 }) };
+          }
+          if (sql.includes('SELECT * FROM queue WHERE id = ?')) {
+            return { get: vi.fn().mockReturnValue(pendingItem) };
+          }
+          if (sql.includes("SELECT COUNT(*) as count FROM queue WHERE status = 'active'")) {
+            return { get: vi.fn().mockReturnValue({ count: 0 }) };
+          }
+          if (sql.includes("SELECT * FROM queue WHERE status = 'pending'")) {
+            callCount++;
+            return { get: vi.fn().mockReturnValue(callCount <= 1 ? pendingItem : undefined) };
+          }
+          if (sql.includes("SELECT COUNT(*) as count FROM queue WHERE status = 'pending'")) {
+            return { get: vi.fn().mockReturnValue({ count: 0 }) };
+          }
+          return { run: vi.fn(), get: vi.fn(), all: vi.fn().mockReturnValue([]) };
+        }),
+      };
+
+      const queueManager = new QueueManager(db, mockTranslator, mockLogger);
+      queueManager.addToQueue({
+        type: 'movie', item_id: '1', item_name: 'Stream Movie',
+        subtitle_file: '/a.mkv', subtitle_stream_id: 5, target_language: 'ja',
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      expect(mockTranslator.translate).toHaveBeenCalledWith(
+        expect.objectContaining({ streamId: 5 })
       );
-      expect(progressCalls.length).toBeGreaterThan(0);
     });
   });
 });

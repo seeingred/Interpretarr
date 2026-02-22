@@ -46,7 +46,7 @@ function Movies() {
 
   if (movies.length === 0) {
     return (
-      <div className="bg-gray-800 rounded-lg p-8 text-center text-gray-400">
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-8 text-center text-gray-500 dark:text-gray-400">
         <p>No movies available. Check your Radarr configuration.</p>
       </div>
     );
@@ -58,13 +58,13 @@ function Movies() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {movies.map((movie) => (
-          <div key={movie.id} className="bg-gray-800 rounded-lg p-6">
+          <div key={movie.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
             <h3 className="text-lg font-semibold mb-2">
               {movie.title} ({movie.year})
             </h3>
             {movie.filePath ? (
               <>
-                <div className="text-xs text-gray-400 mb-4">
+                <div className="text-xs text-gray-500 dark:text-gray-400 mb-4">
                   {movie.filePath.split('/').pop()}
                 </div>
                 <button
@@ -75,7 +75,7 @@ function Movies() {
                 </button>
               </>
             ) : (
-              <p className="text-sm text-gray-400">File not available</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">File not available</p>
             )}
           </div>
         ))}

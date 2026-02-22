@@ -42,16 +42,16 @@ function Layout({ isConfigured, sonarrEnabled, radarrEnabled }: LayoutProps) {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
-      <header className="bg-gray-800 border-b border-gray-700">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white">
+      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         <div className="px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center">
               <h1 className="text-2xl font-bold">Interpretarr</h1>
-              {version && <span className="ml-3 text-xs text-gray-500">v{version}</span>}
+              {version && <span className="ml-3 text-xs text-gray-500 dark:text-gray-400">v{version}</span>}
             </div>
             {!isConfigured && (
-              <div className="flex items-center text-yellow-400">
+              <div className="flex items-center text-yellow-600 dark:text-yellow-400">
                 <ExclamationTriangleIcon className="h-5 w-5 mr-2" />
                 <span className="text-sm">Not configured</span>
               </div>
@@ -61,7 +61,7 @@ function Layout({ isConfigured, sonarrEnabled, radarrEnabled }: LayoutProps) {
       </header>
 
       <div className="flex">
-        <aside className="w-64 bg-gray-800 min-h-[calc(100vh-4rem)]">
+        <aside className="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 min-h-[calc(100vh-4rem)]">
           <nav className="p-4 space-y-1">
             {navigation.map((item) => {
               const Icon = item.icon;
@@ -77,8 +77,8 @@ function Layout({ isConfigured, sonarrEnabled, radarrEnabled }: LayoutProps) {
                     ${isDisabled
                       ? 'opacity-50 cursor-not-allowed pointer-events-none'
                       : isActive
-                      ? 'bg-gray-900 text-white'
-                      : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                      ? 'bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white'
+                      : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
                     }
                   `}
                 >
@@ -93,14 +93,14 @@ function Layout({ isConfigured, sonarrEnabled, radarrEnabled }: LayoutProps) {
         <main className="flex-1">
           <div className="p-8">
             {!isConfigured && location.pathname !== '/settings' && (
-              <div className="mb-6 bg-yellow-900/20 border border-yellow-600 rounded-lg p-4">
+              <div className="mb-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-600 rounded-lg p-4">
                 <div className="flex">
-                  <ExclamationTriangleIcon className="h-5 w-5 text-yellow-400 mt-0.5" />
+                  <ExclamationTriangleIcon className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mt-0.5" />
                   <div className="ml-3">
-                    <h3 className="text-sm font-medium text-yellow-400">
+                    <h3 className="text-sm font-medium text-yellow-700 dark:text-yellow-400">
                       Configuration Required
                     </h3>
-                    <p className="mt-1 text-sm text-yellow-300">
+                    <p className="mt-1 text-sm text-yellow-600 dark:text-yellow-300">
                       Please configure ai-sub-translator and at least one ARR integration in{' '}
                       <Link to="/settings" className="underline font-medium">
                         Settings
@@ -116,9 +116,9 @@ function Layout({ isConfigured, sonarrEnabled, radarrEnabled }: LayoutProps) {
         </main>
       </div>
 
-      <footer className="bg-gray-800 border-t border-gray-700 py-4">
+      <footer className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 py-4">
         <div className="px-4 sm:px-6 lg:px-8">
-          <p className="text-center text-sm text-gray-400">
+          <p className="text-center text-sm text-gray-500 dark:text-gray-400">
             Interpretarr - AI-powered subtitle translation for Radarr/Sonarr
           </p>
         </div>

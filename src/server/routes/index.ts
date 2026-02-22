@@ -6,11 +6,12 @@ import { setupRadarrRoutes } from './radarr.js';
 import { setupSubtitleRoutes } from './subtitles.js';
 import { setupHealthRoutes } from './health.js';
 import { setupLogsRoutes } from './logs.js';
+import { QueueManager } from '../services/queueManager.js';
 
-export async function setupRoutes(fastify: FastifyInstance) {
+export async function setupRoutes(fastify: FastifyInstance, queueManager: QueueManager) {
   await fastify.register(async (fastify) => {
     await setupSettingsRoutes(fastify);
-    await setupQueueRoutes(fastify);
+    await setupQueueRoutes(fastify, queueManager);
     await setupSonarrRoutes(fastify);
     await setupRadarrRoutes(fastify);
     await setupSubtitleRoutes(fastify);

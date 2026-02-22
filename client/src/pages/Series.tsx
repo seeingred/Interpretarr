@@ -72,7 +72,7 @@ function Series() {
 
   if (seriesList.length === 0) {
     return (
-      <div className="bg-gray-800 rounded-lg p-8 text-center text-gray-400">
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-8 text-center text-gray-500 dark:text-gray-400">
         <p>No series available. Check your Sonarr configuration.</p>
       </div>
     );
@@ -88,10 +88,10 @@ function Series() {
             <div
               key={series.id}
               onClick={() => loadEpisodes(series)}
-              className="bg-gray-800 rounded-lg p-6 cursor-pointer hover:bg-gray-750 transition-colors"
+              className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
             >
               <h3 className="text-lg font-semibold mb-2">{series.title}</h3>
-              <div className="text-sm text-gray-400">
+              <div className="text-sm text-gray-500 dark:text-gray-400">
                 <p>{series.seasonCount} seasons</p>
                 <p>{series.episodeFileCount} episodes</p>
               </div>
@@ -102,7 +102,7 @@ function Series() {
         <div>
           <button
             onClick={() => setSelectedSeries(null)}
-            className="mb-4 text-blue-400 hover:text-blue-300"
+            className="mb-4 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
           >
             ← Back to series
           </button>
@@ -110,11 +110,11 @@ function Series() {
           <h3 className="text-xl font-semibold mb-4">{selectedSeries.title}</h3>
 
           {episodes.length === 0 ? (
-            <div className="bg-gray-800 rounded-lg p-8 text-center text-gray-400">
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-8 text-center text-gray-500 dark:text-gray-400">
               <p>No episodes with files available</p>
             </div>
           ) : (
-            <div className="bg-gray-800 rounded-lg overflow-hidden">
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
               {Object.entries(
                 episodes.reduce((acc, episode) => {
                   const season = `Season ${episode.seasonNumber}`;
@@ -126,21 +126,21 @@ function Series() {
                 .sort(([a], [b]) => b.localeCompare(a))
                 .map(([season, seasonEpisodes]) => (
                   <div key={season}>
-                    <div className="bg-gray-700 px-6 py-3">
+                    <div className="bg-gray-100 dark:bg-gray-700 px-6 py-3">
                       <h4 className="font-medium">{season}</h4>
                     </div>
-                    <div className="divide-y divide-gray-700">
+                    <div className="divide-y divide-gray-200 dark:divide-gray-700">
                       {seasonEpisodes.map((episode) => (
                         <div
                           key={episode.id}
-                          className="px-6 py-4 flex justify-between items-center hover:bg-gray-750"
+                          className="px-6 py-4 flex justify-between items-center hover:bg-gray-50 dark:hover:bg-gray-700/50"
                         >
                           <div>
                             <div className="font-medium">
                               Episode {episode.episodeNumber}: {episode.title}
                             </div>
                             {episode.filePath && (
-                              <div className="text-xs text-gray-400 mt-1">
+                              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                                 {episode.filePath.split('/').pop()}
                               </div>
                             )}

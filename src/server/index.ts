@@ -6,6 +6,8 @@ import { fileURLToPath } from 'url';
 import { setupRoutes } from './routes/index.js';
 import { initializeDatabase } from './db/database.js';
 import { QueueManager } from './services/queueManager.js';
+import { NpmTranslatorAdapter } from './services/npmTranslatorAdapter.js';
+import { SettingsService } from './services/settings.js';
 import { logger } from './utils/logger.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -19,10 +21,17 @@ async function start() {
     origin: true
   });
 
-  initializeDatabase();
-  QueueManager.getInstance();
+  const db = initializeDatabase();
 
-  await setupRoutes(fastify);
+  // Wire up dependencies
+  const settings = SettingsService.getInstance();
+  const translator = new NpmTranslatorAdapter(settings);
+  const queueManager = new QueueManager(db, translator, logger);
+
+  // Recover any stale items from a previous crash
+  queueManager.recover();
+
+  await setupRoutes(fastify, queueManager);
 
   const clientPath = path.join(__dirname, '../../client/dist');
   await fastify.register(fastifyStatic, {
