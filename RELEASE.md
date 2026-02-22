@@ -1,151 +1,61 @@
-# Release Guide
+# Interpretarr v2.0.0
 
-## Version Management
+Major refactoring release with a rewritten architecture, new features, and comprehensive testing.
 
-Current version is defined in `package.json`. To bump the version:
+## Highlights
 
-```bash
-# Patch release (e.g. 2.0.0 -> 2.0.1)
-npm version patch
+- **npm module integration** — Translation engine extracted to [`ai-sub-translator`](https://www.npmjs.com/package/ai-sub-translator) v1.2.0, replacing the JSON-RPC approach
+- **Event-driven queue** — Rewritten FIFO queue using microtasks instead of `setInterval`, with AbortController cancellation and crash recovery
+- **Embedded subtitle support** — Detect and extract embedded SRT subtitle tracks from video files via FFmpeg
+- **Source language selector** — Specify the source language in the translate dialog for more accurate translations; auto-populates from subtitle track metadata (ISO 639 codes)
+- **FFmpeg background download** — FFmpeg pre-downloads at server startup with real-time progress notification in the UI; persisted to `data/ffmpeg/` so Docker containers don't re-download on restart
+- **Light/dark mode** — Follows system preference via Tailwind CSS media strategy
+- **Configurable data directory** — `DATA_DIR` env var to customize where the database and logs are stored
+- **Docker improvements** — Media mount now defaults to read-write (required for saving translated subtitles next to video files)
 
-# Minor release (e.g. 2.0.0 -> 2.1.0)
-npm version minor
+## New Features
 
-# Major release (e.g. 2.0.0 -> 3.0.0)
-npm version major
-```
+- Source language field in the Translate dialog with datalist of common languages
+- FFmpeg download progress toast notification (SSE-powered)
+- `GET /api/ffmpeg/status` endpoint (SSE stream + poll mode)
+- `source_language` column in the queue table (auto-migrated for existing databases)
+- `DATA_DIR` environment variable for custom data directory
 
-This automatically updates `package.json` and creates a git tag.
+## Bug Fixes
 
-## Building
+- Fixed `SQLITE_READONLY_DBMOVED` error when stale server holds the DB file
+- Fixed stream index 0 being treated as falsy (`null` vs `undefined` check)
+- Fixed E2E tests overwriting user's `data/` directory — now uses isolated `tests/e2e/tmp/data`
+- Fixed Docker README media mount showing `:ro` (subtitles need write access)
 
-### Docker Image
+## Breaking Changes
 
-> **Note:** The `ai-sub-translator` dependency uses a `file:` reference (`file:../ai-sub-translator`) in package.json.
-> For Docker builds to work, the `ai-sub-translator` package must first be published to npm and the dependency
-> updated to a versioned reference (e.g. `"ai-sub-translator": "^1.0.0"`). Until then, Docker builds will fail
-> during `npm ci` because the local file path is not available inside the Docker build context.
+- Requires `ai-sub-translator` v1.2.0 (bundled via npm)
+- Database schema adds `source_language` column (auto-migrated on startup)
 
-Once the dependency is published:
-
-```bash
-# Build the image
-docker build -t interpretarr:latest .
-
-# Tag for GitHub Container Registry
-docker tag interpretarr:latest ghcr.io/seeingred/interpretarr:VERSION
-docker tag interpretarr:latest ghcr.io/seeingred/interpretarr:latest
-
-# Push
-docker push ghcr.io/seeingred/interpretarr:VERSION
-docker push ghcr.io/seeingred/interpretarr:latest
-```
-
-Replace `VERSION` with the actual version (e.g. `2.0.0`).
-
-### Standalone Package
-
-A prebuilt standalone package lets users run Interpretarr without building from source. They only need Node.js installed.
-
-Use the build script:
+## Docker
 
 ```bash
-./scripts/build-release.sh
+docker compose up -d --build
 ```
 
-This will:
-1. Build the server and client (`npm run build`)
-2. Copy `dist/`, `client/dist/`, `package.json`, and `package-lock.json` into a release directory
-3. Install production-only dependencies
-4. Create `start.sh` (Linux/macOS) and `start.bat` (Windows) scripts
-5. Package everything into `release/interpretarr-VERSION.tar.gz`
-
-Users just need to:
-1. Extract the archive
-2. Run `./start.sh` (or `start.bat` on Windows)
-
-## GitHub Release Process
-
-### 1. Bump the version
+Or standalone:
 
 ```bash
-npm version patch   # or minor/major
+docker run -d --name interpretarr -p 3000:3000 \
+  -v ./data:/app/data \
+  -v /path/to/media:/path/to/media \
+  interpretarr
 ```
 
-### 2. Build and test
+## Full Changelog
 
-```bash
-npm run build
-npm test
-```
-
-### 3. Create a git tag (if not using `npm version`)
-
-```bash
-git tag v$(node -p "require('./package.json').version")
-```
-
-### 4. Push the tag
-
-```bash
-git push origin main --tags
-```
-
-### 5. Build the release package
-
-```bash
-./scripts/build-release.sh
-```
-
-### 6. Create the GitHub release
-
-Go to **Releases > Draft a new release** on GitHub, or use the CLI:
-
-```bash
-VERSION=$(node -p "require('./package.json').version")
-
-gh release create "v${VERSION}" \
-  --title "v${VERSION}" \
-  --notes-file - \
-  "release/interpretarr-${VERSION}.tar.gz" << 'EOF'
-## What's Changed
-
-(Write release notes here)
-
-## Installation
-
-### Docker
-```
-docker pull ghcr.io/seeingred/interpretarr:VERSION
-```
-
-### Standalone
-Download `interpretarr-VERSION.tar.gz`, extract, and run `./start.sh`.
-Requires Node.js 20+.
-EOF
-```
-
-## Changelog
-
-### v2.0.0
-
-Major refactoring release. Interpretarr now includes a built-in translation engine and no longer requires an external service.
-
-**Breaking Changes:**
-- No longer requires the external `ai-sub-translator` JSON-RPC service
-
-**New Features:**
-- Built-in translation engine powered by Google Gemini
-- Configurable Gemini model selection (`gemini-2.0-flash` default)
-- Configurable batch size for translation
-- Light and dark mode (follows system preference)
-
-**Improvements:**
-- Completely rewritten queue system -- event-driven and reliable
-- Crash recovery -- stale active jobs are reset on server restart
-- Clean cancellation with AbortController
-- Improved translation prompt for cleaner subtitle output
-
-**Removed:**
-- JSON-RPC dependency on external `ai-sub-translator` service
-- `jayson` and `node-fetch` dependencies
+- Add E2E data isolation, FFmpeg background download, source language selector
+- Fix SQLITE_READONLY_DBMOVED: kill stale server before DB backup
+- Fix E2E stability: kill stale port, use tsx without watch mode
+- Update ai-sub-translator to 1.2.0
+- Increase E2E timeouts, fix stream index 0 bug in queue
+- Fix null vs undefined streamId check, clean stale E2E files
+- Add embedded subtitle extraction, remove E2E SRT fixtures
+- Add docker-compose.example.yml
+- Refactor: npm module integration, event-driven queue, dark mode, tests
